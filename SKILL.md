@@ -108,3 +108,6 @@ skill's templates — their setup has presumably diverged for reasons specific t
 - `references/git-github-rails.md` — optional server-side layer (CODEOWNERS, CI checks, when to
   use a real PR instead of a `HANDOFFS.md` entry) for a project that's outgrown pure client-side
   enforcement. Read only when step 5 above applies.
+- `docs/ru/CROSS_PLATFORM_BRIDGE.md` - details on LLM agnosticism, Git Worktrees (`worktree_launcher.py`), and soft context limits.
+
+Also check `coordination/tools/status.py` as a useful CLI dashboard for human orchestrators to see the overall state of the project.

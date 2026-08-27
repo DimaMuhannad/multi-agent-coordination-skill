@@ -47,7 +47,7 @@ it does, don't overwrite existing hooks):
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/check-context-budget.sh"
+            "command": "python .claude/hooks/check-context-budget.py"
           }
         ]
       }
@@ -56,14 +56,12 @@ it does, don't overwrite existing hooks):
 }
 ```
 
-Make the script executable: `chmod +x .claude/hooks/check-context-budget.sh`.
-
 Verify it actually fires and warns correctly before trusting it — write a `roles/TEST.md` file
 larger than the configured `limit_bytes`, then feed the hook synthetic stdin matching what
 `SessionStart` sends:
 
 ```bash
-echo '{"source":"startup"}' | bash .claude/hooks/check-context-budget.sh
+echo '{"source":"startup"}' | python .claude/hooks/check-context-budget.py
 ```
 
 You should see a `systemMessage` JSON line naming the oversized file. Delete the test file

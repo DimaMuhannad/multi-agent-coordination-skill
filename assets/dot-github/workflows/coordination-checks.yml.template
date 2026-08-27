@@ -40,14 +40,14 @@ jobs:
 
       - name: Cold-start budget (coordination/roles/*.md)
         run: |
-          set -e
-          if [ ! -f .claude/hooks/check-context-budget.sh ]; then
-            echo "no .claude/hooks/check-context-budget.sh in this repo — skipping (this workflow assumes the scaffold's own hook is installed at that path; see references/setup.md)"
-            exit 0
-          fi
-          out="$(echo '{"source":"startup"}' | bash .claude/hooks/check-context-budget.sh)"
-          if [ -n "$out" ]; then
-            echo "::error::$out"
+          # Pass a synthetic startup payload to the budget hook
+          echo '{"source":"startup"}' | python .claude/hooks/check-context-budget.py > budget_out.txt
+          cat budget_out.txt
+          
+          # If the hook output contains a systemMessage (which it does when warning),
+          # fail the check so the PR author knows a role is overgrown.
+          if grep -q "systemMessage" budget_out.txt; then
+            echo "::error::One or more role files exceed the cold-start budget (see output above)."
+            echo "This is a soft limit locally, but strongly enforced in CI to prevent context decay."
             exit 1
           fi
-          echo "all coordination/roles/*.md within budget"
