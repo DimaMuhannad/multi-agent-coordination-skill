@@ -114,6 +114,12 @@ python coordination/tools/kpi_git.py
 python coordination/tools/kpi_git.py --json coordination/reports/kpi_git.json
 ```
 
+If you are using the Streamlit dashboard, you will need to install its dependencies:
+
+```bash
+pip install -r assets/coordination/tools/dashboard/requirements.txt
+```
+
 Neither needs registering anywhere — run them manually, or wire either into a scheduled task if
 your tooling supports one (e.g. a Claude Code Routine that clones the repo read-only, regenerates
 `INDEX.md`, and commits it — only worth doing once the journals are large enough that a stale
