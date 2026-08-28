@@ -59,7 +59,7 @@ its own PR. Don't present it as enforcement it isn't providing.
 `assets/dot-github/workflows/coordination-checks.yml.template` re-runs the same two checks the
 local hooks already do — commit trailer format, cold-start budget — but on GitHub's own runner,
 independent of whether the pushing session had the local hook installed. It deliberately reuses
-`check-context-budget.sh` verbatim rather than reimplementing the budget check in a different
+`check-context-budget.py` verbatim rather than reimplementing the budget check in a different
 language — one rule, one implementation, checked in two places.
 
 **When this earns its place:** once you've actually had a commit land with broken trailers or an

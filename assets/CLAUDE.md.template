@@ -44,7 +44,7 @@ at all. Whoever edits a listed file is responsible for updating its row.
 
 `coordination/roles/<ID>.md` cold-start budget (suggest ≤1200 tokens ≈ 2400 bytes) is checked
 automatically by the `SessionStart` hook this skill installs
-(`.claude/hooks/check-context-budget.sh` + `budget.json`) — see `references/setup.md` in this
+(`.claude/hooks/check-context-budget.py` + `budget.json`) — see `references/setup.md` in this
 skill for how it's wired in. That means the number in this table can't silently go stale the way
 a purely-documented budget would — the hook warns on its own when a role file grows past it.
 

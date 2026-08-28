@@ -13,7 +13,7 @@ case the piece you're about to drop is exactly the fix for a failure mode you ha
 
 ## When this fits, and when it doesn't
 
-This is for a project where **multiple Claude Code sessions genuinely need to hold distinct,
+This is for a project where **multiple agent sessions genuinely need to hold distinct,
 continuing responsibilities** ("zones") in the same repository over an extended period — not a
 single session doing one task, and not a one-off parallel fan-out you'd reach for the `Agent`
 tool for instead. The giveaway questions: will more than one named, persistent session work this
@@ -77,7 +77,17 @@ launch a session, and where the guardrails live — not a full walkthrough of ev
 templates themselves are meant to be self-explanatory reading. Point them at
 `references/rationale.md` if they ask *why* something is shaped a particular way.
 
-### 5. Optional: git/GitHub rails
+### 5. Not Claude-Code-only
+
+A role is held by whatever session reads `coordination/roles/<ID>.md` and makes commits, so the
+scaffold works for Claude Code, Gemini via Antigravity, Cursor, Aider or a human. Two things in
+the templates are Claude Code conveniences, not requirements: `claude -n <name>` for naming a
+session and `claude agents --json` for "who is working right now". If the project uses other
+platforms, say so when filling in `CLAUDE.md` and `CHARTER.md §1`, and note that git is the
+arbiter there — which `CHARTER.md` already says for the cross-machine case. Do NOT add a
+replacement liveness registry; `CONCEPT.md §3.5` explains why that was deliberately excluded.
+
+### 6. Optional: git/GitHub rails
 
 Not part of the interview above, and not something to set up by default — only reach for it when
 the user explicitly asks about GitHub-side enforcement (CI, required reviewers, branch protection)
@@ -87,6 +97,23 @@ session skipped the local hook; a shared "hot spot" file keeps colliding). Read
 Code behavior versus a GitHub feature the project adds, which of `assets/dot-github/*` to copy in,
 and an explicit warning against moving `QUESTIONS.md`/`HANDOFFS.md` onto GitHub Issues. Same
 principle as step 3: don't pre-install this speculatively.
+
+### 7. Optional: the Streamlit dashboard
+
+Same rule as the rails: not part of the interview, not installed by default. It is the only
+piece of the scaffold that needs a third-party dependency, and the only one that **writes** to
+the journals. Reach for it when a human wants to see project state without reading four files,
+and say plainly what it does and does not do:
+
+- read-only by default; writing requires `COORDINATION_DASHBOARD_WRITES=1` for that session;
+- every write is previewed as a diff, names its destination table, and is confirmed by a human;
+- it refuses to write to any file whose schema it could not read;
+- git remains the arbiter — each write is a commit with `CHARTER.md §4` trailers.
+
+Those four conditions are what keep it compatible with `docs/ru/CONCEPT.md §6.5`'s invariant
+("the interface is a read-only projection over git") rather than a second source of truth; they
+are written up as §6.6 there. If a project only wants the read-only view, `build_index.py` gives
+it with no dependencies at all.
 
 ## Reviewing or fixing an existing setup
 

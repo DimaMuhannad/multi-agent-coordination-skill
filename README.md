@@ -1,8 +1,14 @@
 # multi-agent-coordination-skill
 
 A [Claude Code Skill](https://docs.claude.com/en/docs/claude-code/skills) that sets up a
-coordination scaffold for projects where several Claude Code sessions — each holding a distinct,
+coordination scaffold for projects where several agent sessions — each holding a distinct,
 continuing role/zone — share one repository over an extended period.
+
+The scaffold is platform-agnostic: a role is held by whatever session reads its file and makes
+commits, so Claude Code, Gemini via Antigravity, Cursor or Aider can each hold one. See
+[`docs/ru/CROSS_PLATFORM_BRIDGE.md`](docs/ru/CROSS_PLATFORM_BRIDGE.md). Two conveniences named
+in the templates (`claude -n <name>` and `claude agents --json`) are Claude Code features; on
+any other platform, skip them — git is the arbiter that works everywhere.
 
 It's not a framework or a running service: there's no server, no live process registry, no
 database. It's a set of markdown templates and two small stdlib-only Python scripts, distilled
@@ -15,9 +21,12 @@ it hit along the way. Those problems — and why the fix looks the way it does �
 - **`coordination/` templates** — role zone files, an append-only decision journal
   (`QUESTIONS.md`), cross-role request log (`HANDOFFS.md`), project-wide activity journal
   (`ACTIVITY.md`), ownership map, charter of working rules, and a launch-prompt table.
-- **`.claude/hooks/check-context-budget.sh`** — a `SessionStart` hook that warns (never blocks)
+- **`.claude/hooks/check-context-budget.py`** — a `SessionStart` hook that warns (never blocks)
   when a role's cold-start file grows past its byte budget, so "keep this file short" stays true
   without anyone having to remember to check.
+- **`coordination/tools/coordlib/`** — the shared, stdlib-only core: one status vocabulary, one
+  markdown-table tokenizer, and the diagnostics channel the tools use to say "this file's schema
+  was not recognised" instead of quietly reporting zero.
 - **`.claude/rules/`** — an example of Claude Code's path-scoped `paths:` rule files, for pushing
   domain knowledge out of the always-loaded `CLAUDE.md` and into context only when a session
   actually touches the relevant paths.
@@ -26,6 +35,19 @@ it hit along the way. Those problems — and why the fix looks the way it does �
 - **`coordination/tools/kpi_git.py`** — per-role commit/line/active-day stats from `git log`
   alone (no external telemetry, no live process tracking) — with configurable exclusions for
   bulk-import commits and non-authored (data/generated) paths.
+
+### Optional add-ons
+
+Neither is part of the base scaffold; install one only when the project has actually hit the
+problem it solves.
+
+- **git/GitHub rails** (`assets/dot-github/`) — CODEOWNERS, CI checks. See
+  [`references/git-github-rails.md`](references/git-github-rails.md).
+- **`coordination/tools/dashboard/`** — a Streamlit dashboard over the journals. It is the only
+  piece here that requires a third-party dependency, and the only one that **writes**. It is
+  read-only by default; writing is enabled per session with
+  `COORDINATION_DASHBOARD_WRITES=1`, and every write is previewed as a diff and confirmed
+  before it is saved. The core scaffold stays markdown plus stdlib Python.
 
 ## Using it
 

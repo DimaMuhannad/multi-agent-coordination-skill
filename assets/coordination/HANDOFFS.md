@@ -22,6 +22,10 @@ vs `Статус:` vs `done (resolved)` vs a status buried mid-paragraph), and a
 against "the status line" quietly stops finding some of them. Enforce the literal string from the
 first entry, not just when it starts hurting.
 
+The three keywords stay English even in a project written in another language — they are
+parsed by tooling, while the What/Context/Done-when text is prose and is not
+(`references/rationale.md`).
+
 Closing an entry means editing that one line in place (`open` → `done`) — that's not a violation
 of append-only, since the surrounding decision text above it isn't touched.
 

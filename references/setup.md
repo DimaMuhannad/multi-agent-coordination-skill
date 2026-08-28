@@ -22,9 +22,11 @@ coordination/
     build_index.py
     kpi_git.py
     kpi_config.json  (optional, from kpi_config.json.template — only if the project needs it)
+    coordlib/        (shared, stdlib-only: vocabulary, table tokenizer, diagnostics)
+    dashboard/       (OPTIONAL add-on — needs streamlit; see §7)
 .claude/
   hooks/
-    check-context-budget.sh
+    check-context-budget.py
     budget.json      (from budget.json.template)
   rules/
     <topic>.md        (optional, path-scoped — see references/setup.md §3)
@@ -35,7 +37,7 @@ archive/
 
 ## 2. Wiring the SessionStart hook
 
-`check-context-budget.sh` only does anything if it's actually registered. Add to
+`check-context-budget.py` only does anything if it's actually registered. Add to
 `.claude/settings.json` (create the file if the project doesn't have one yet — merge into it if
 it does, don't overwrite existing hooks):
 
@@ -114,10 +116,16 @@ python coordination/tools/kpi_git.py
 python coordination/tools/kpi_git.py --json coordination/reports/kpi_git.json
 ```
 
-If you are using the Streamlit dashboard, you will need to install its dependencies:
+Both print diagnostics to stderr when something in the journals could not be interpreted,
+and list those rows under an **Unrecognised** heading inside `INDEX.md` itself. Neither
+blocks: add `--strict` if you want `build_index.py` to exit 2 instead. See §8 on why the
+tools refuse to guess at a translated status word.
+
+To run the test suite (from the repo root):
 
 ```bash
-pip install -r assets/coordination/tools/dashboard/requirements.txt
+python -m pytest -m "not streamlit"   # protocol suite; pytest is the only dependency
+python -m pytest                       # everything, including the dashboard UI tests
 ```
 
 Neither needs registering anywhere — run them manually, or wire either into a scheduled task if
@@ -142,8 +150,9 @@ Only do this once `references/git-github-rails.md` §"when this earns its place"
 
 2. **CI checks.** Copy `assets/dot-github/workflows/coordination-checks.yml.template` to
    `.github/workflows/coordination-checks.yml` (drop the `.template` suffix). No placeholders to
-   fill — it reads `.claude/hooks/check-context-budget.sh` and `coordination/roles/*.md` at their
-   standard paths. Push it and confirm the workflow actually appears and runs (GitHub's Actions
+   fill — it reads `.claude/hooks/check-context-budget.py` and `coordination/roles/*.md` at their
+   standard paths. Note the budget step **warns and does not fail the build**, matching the
+   local hook and `README.md`; the test jobs are the ones that gate. Push it and confirm the workflow actually appears and runs (GitHub's Actions
    tab) — don't assume it's wired up correctly from the YAML alone; the real verification is
    watching it run once, the same way the local hook was verified with synthetic stdin in §2.
 
