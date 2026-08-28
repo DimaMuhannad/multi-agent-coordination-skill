@@ -57,6 +57,7 @@ from .schema import (
     resolve_column,
     resolve_headers,
     split_role_status_date,
+    strip_decoration,
 )
 from .paths import find_coordination_dir, find_repo_root, is_within, worktrees_dir
 
@@ -93,6 +94,7 @@ __all__ = [
     "BOARD_STATUSES",
     "MISSING",
     "normalise",
+    "strip_decoration",
     "is_placeholder_text",
     "classify_item_status",
     "classify_role_status",

@@ -130,37 +130,66 @@ class TestAdversarialEscapedPipes(unittest.TestCase):
 class TestAdversarialUnicodeCyrillicEmoji(unittest.TestCase):
     """Stress testing Cyrillic, emojis, and multibyte unicode symbols."""
 
-    def test_cyrillic_board_parsing_and_mutation(self):
-        content = (
+    def test_cyrillic_schema_is_refused_and_cyrillic_content_is_preserved(self):
+        """Inverted deliberately. This test used to assert that translated table headers and
+        translated status values parsed into two live roles.
+
+        They did parse - and then parser.py classified the translated status values as
+        closed, so the same board rendered rows that were all silently counted inactive.
+        Half-supporting a translated schema is what produced "Roles Active: 0 / 2" on a
+        Russian project. The tools now say so instead of guessing.
+
+        The second half of the test is the part that must keep working: Russian PROSE under
+        canonical English headers is the supported shape for a non-English project.
+        """
+        translated_schema = (
             "# BOARD — роли проекта\n\n"
             "| Роль | Статус (дата) | Описание |\n"
             "|---|---|---|\n"
-            "| Архитектор | активен (2026-08-27) | Разработка архитектуры и контрактов |\n"
+            "| Архитектор | активен (2026-08-27) | Разработка архитектуры |\n"
             "| Тестировщик | в_процессе (2026-08-27) | Написание стресс-тестов |\n"
         )
-        with tempfile.TemporaryDirectory() as tmpdir:
-            fpath = Path(tmpdir) / "BOARD.md"
-            fpath.write_text(content, encoding="utf-8")
+        canonical_schema = (
+            "# BOARD — роли проекта\n\n"
+            "| Role | Status (date) | One-line summary |\n"
+            "|---|---|---|\n"
+            "| Архитектор | active (2026-08-27) | Разработка архитектуры и контрактов |\n"
+            "| Тестировщик | idle (2026-08-27) | Написание стресс-тестов |\n"
+        )
 
-            records = parse_board(fpath)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bad = Path(tmpdir) / "BOARD_translated.md"
+            bad.write_text(translated_schema, encoding="utf-8")
+
+            diagnostics = []
+            self.assertEqual(parse_board(bad, diagnostics=diagnostics), [])
+            self.assertTrue(
+                any(d.code == "unknown-table-schema" for d in diagnostics),
+                "a translated schema must be reported, not silently skipped",
+            )
+
+            good = Path(tmpdir) / "BOARD.md"
+            good.write_text(canonical_schema, encoding="utf-8")
+
+            records = parse_board(good)
             self.assertEqual(len(records), 2)
             self.assertEqual(records[0]["role"], "Архитектор")
-            self.assertEqual(records[0]["status"], "активен")
+            self.assertEqual(records[0]["status_known"], "active")
             self.assertEqual(records[0]["date"], "2026-08-27")
 
-            # Mutate Russian role status
-            success, msg = mutate_table_cell(
-                fpath,
-                key_col="роль",
+            ok, msg = mutate_table_cell(
+                good,
+                key_col="Role",
                 key_val="Архитектор",
-                target_col="статус (дата)",
-                new_val="завершено (2026-08-28)"
+                target_col="Status (date)",
+                new_val="blocked (2026-08-28)",
             )
-            self.assertTrue(success, msg)
+            self.assertTrue(ok, msg)
 
-            updated = parse_board(fpath)
-            self.assertEqual(updated[0]["status"], "завершено")
+            updated = parse_board(good)
+            self.assertEqual(updated[0]["status_known"], "blocked")
             self.assertEqual(updated[0]["date"], "2026-08-28")
+            self.assertEqual(updated[0]["role"], "Архитектор")
 
     def test_emoji_and_multibyte_math_symbols(self):
         content = (

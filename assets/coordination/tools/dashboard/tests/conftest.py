@@ -195,6 +195,93 @@ def crlf_markdown_files(tmp_path: Path) -> Dict[str, Path]:
 
 
 @pytest.fixture
+def russian_content_files(tmp_path: Path) -> Dict[str, Path]:
+    """Canonical ENGLISH headers and status keywords, with Russian prose and emoji as content.
+
+    This is the supported shape for a non-English project, and it must keep working: the
+    status/type keywords and table headers are protocol tokens that tooling parses, while
+    questions, answers, summaries and handoff bodies are prose in the project's own language.
+
+    Contrast with `russian_schema_files`, where the protocol tokens themselves are Russian
+    and the tools must refuse to guess.
+    """
+    coord = tmp_path / "ru_content"
+    coord.mkdir(parents=True, exist_ok=True)
+
+    board = (
+        "# Статус ролей 🤖\n\n"
+        "| Role | Status (date) | One-line summary |\n"
+        "|---|---|---|\n"
+        "| архитектор | active (2026-08-27) | Разработка архитектуры и контрактов 📐 |\n"
+        "| тестировщик | idle (2026-08-26) | Ожидание сборки тест-раннера 🧪 |\n"
+    )
+    questions = (
+        "# Вопросы и решения ❓\n\n"
+        "## Пакет 1\n\n"
+        "| # | Question | Owner's answer | Type | Status |\n"
+        "|---|---|---|---|---|\n"
+        "| Q-1 | Поддерживаем ли UTF-8 и эмодзи 🚀? | Да, полная поддержка | blocking | open |\n"
+        "| Q-2 | Формула $\\int_0^1 x^2 dx$ верна? | Абсолютно точно | non-blocking | resolved |\n"
+        "| Q-3 | Как экранировать `cat \\| grep`? | Символом `\\|` | blocking | open |\n"
+    )
+    handoffs = (
+        "# Передачи задач 🤝\n\n"
+        "## [2026-08-27] FROM архитектор TO тестировщик — Создание модуля парсера\n"
+        "- What: Написать `parser.py` с поддержкой русского языка\n"
+        "- Context: Проект координации мультиагентов\n"
+        "- Done when: Все тесты проходят успешно 🎉\n"
+        "- **Status:** taken\n"
+    )
+
+    files = {"dir": coord}
+    for name, text in (("BOARD", board), ("QUESTIONS", questions), ("HANDOFFS", handoffs)):
+        path = coord / f"{name}.md"
+        path.write_text(text, encoding="utf-8", newline="\n")
+        files[f"{name.lower()}_file"] = path
+    return files
+
+
+@pytest.fixture
+def russian_schema_files(tmp_path: Path) -> Dict[str, Path]:
+    """Russian PROTOCOL tokens: translated headers and translated status/type values.
+
+    This is the shape the tools must reject with an explicit diagnostic rather than parse
+    into believable-looking numbers. references/rationale.md records what happened when the
+    source project let `Статус:` drift in alongside `Status:`.
+    """
+    coord = tmp_path / "ru_schema"
+    coord.mkdir(parents=True, exist_ok=True)
+
+    board = (
+        "# Статус ролей\n\n"
+        "| Роль | Статус (дата) | Описание |\n"
+        "|---|---|---|\n"
+        "| архитектор | активен (2026-08-27) | Разработка архитектуры |\n"
+        "| тестировщик | в_процессе (2026-08-26) | Написание тестов |\n"
+    )
+    questions = (
+        "# Вопросы\n\n"
+        "| № | Вопрос | Ответ | Тип | Статус |\n"
+        "|---|---|---|---|---|\n"
+        "| Q-1 | Первый вопрос? | — | блокирующий | открыт |\n"
+        "| Q-2 | Второй вопрос? | Да | неблокирующий | решён |\n"
+    )
+    handoffs = (
+        "# Передачи\n\n"
+        "## [2026-08-27] FROM архитектор TO тестировщик — Модуль парсера\n"
+        "- What: Написать парсер\n"
+        "- **Status:** открыт\n"
+    )
+
+    files = {"dir": coord}
+    for name, text in (("BOARD", board), ("QUESTIONS", questions), ("HANDOFFS", handoffs)):
+        path = coord / f"{name}.md"
+        path.write_text(text, encoding="utf-8", newline="\n")
+        files[f"{name.lower()}_file"] = path
+    return files
+
+
+@pytest.fixture
 def unicode_markdown_files(tmp_path: Path) -> Dict[str, Path]:
     """
     Creates coordination markdown files containing Cyrillic headers, emojis, and multibyte math symbols.

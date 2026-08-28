@@ -134,23 +134,28 @@ def test_mutate_table_cell_lf_preservation(tmp_path):
     assert b"\n" in raw_bytes
 
 
-def test_mutate_table_cell_unicode_cyrillic(unicode_markdown_files):
-    q_file = unicode_markdown_files["questions_file"]
+def test_mutate_table_cell_preserves_russian_content(russian_content_files):
+    """Editing a row whose content is Russian must leave that content byte-intact.
+
+    Retargeted from Cyrillic *headers* to Cyrillic *content*: translated headers are now
+    refused outright (see test_parser.py), but Russian prose under canonical headers is the
+    supported shape and is what this test was really about.
+    """
+    q_file = russian_content_files["questions_file"]
 
     ok, msg = mutate_table_cell(
         file_path=q_file,
-        key_col="№",
+        key_col="#",
         key_val="Q-1",
-        target_col="Статус",
-        new_val="resolved"
+        target_col="Status",
+        new_val="resolved",
     )
-    assert ok is True
+    assert ok is True, msg
 
     questions = parse_questions(q_file)
     q1 = next(q for q in questions if q["id"] == "Q-1")
     assert q1["status"] == "resolved"
     assert "UTF-8 и эмодзи 🚀" in q1["question"]
-
 
 def test_mutate_table_cell_preserves_comments_and_surroundings(tmp_path):
     content = (

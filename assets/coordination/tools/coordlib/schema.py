@@ -62,6 +62,15 @@ _DECORATION = "`* \\"
 _PLACEHOLDER_RE = re.compile(r"^<[^>]*>$")
 
 
+def strip_decoration(raw: Optional[str]) -> str:
+    """Strip markdown decoration from a cell value, preserving case.
+
+    For identifiers such as role names and question IDs, where `**ORCH**` and `ORCH` are the
+    same role but the displayed casing matters. Use normalise() when comparing vocabulary.
+    """
+    return (raw or "").strip().strip(_DECORATION).strip()
+
+
 def normalise(raw: Optional[str]) -> str:
     """Strip markdown decoration and case from a cell value.
 
