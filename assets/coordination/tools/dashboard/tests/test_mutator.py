@@ -211,7 +211,7 @@ def test_mutate_table_cell_nonexistent_targets_fail_gracefully(tmp_path):
     # Nonexistent target column
     ok, msg = mutate_table_cell(fpath, "Role", "lead", "NonexistentColumn", "val")
     assert ok is False
-    assert "not found" in msg
+    assert "NonexistentColumn" in msg, "the message must name the column at fault"
 
     # Nonexistent file
     ok, msg = mutate_table_cell(tmp_path / "NO_FILE.md", "Role", "lead", "Status", "val")

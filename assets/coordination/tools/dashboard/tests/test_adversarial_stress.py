@@ -66,32 +66,40 @@ class TestAdversarialInvariantsAndStress(unittest.TestCase):
             self.assertEqual(q_list[0]["status"], "open")
             self.assertEqual(q_list[1]["status"], "open")
 
-    def test_multi_column_wide_table_with_empty_cells(self):
-        """Tables with empty cells, whitespace cells, and many columns."""
+    def test_wide_table_with_empty_cells_round_trips(self):
+        """Empty, whitespace-only and many columns survive tokenize -> format -> tokenize.
+
+        Retargeted at the tokenizer. This used to drive mutate_table_cell with columns
+        C1..C8, which are not coordination columns at all; the mutator now refuses to write
+        to a table whose schema it does not recognise, which is the safety property, so the
+        round-trip concern is tested where it actually lives.
+        """
+        row = "| K1 |   | val3 | | val5 |   val6   | | val8 |"
+        cells = split_table_row(row)
+        self.assertEqual(cells, ["K1", "", "val3", "", "val5", "val6", "", "val8"])
+
+        rendered = format_table_row(cells)
+        self.assertEqual(split_table_row(rendered.strip()), cells)
+
+    def test_mutator_refuses_a_table_it_does_not_understand(self):
+        """A tool that cannot read a file must not write to it.
+
+        C1..C8 carry no coordination meaning, so there is no way to know which column holds
+        what. Refusing is correct; the old fuzzy matcher would pick one and write to it.
+        """
         content = (
-            "| C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8 |\n"
-            "|---|---|---|---|---|---|---|---|\n"
-            "| K1 |   | val3 | | val5 |   val6   | | val8 |\n"
+            "| C1 | C2 | C3 |\n"
+            "|---|---|---|\n"
+            "| K1 | v2 | v3 |\n"
         )
         with tempfile.TemporaryDirectory() as tmpdir:
             fpath = Path(tmpdir) / "TABLE.md"
             fpath.write_text(content, encoding="utf-8")
 
-            # Mutate empty C4 to new value
-            ok, msg = mutate_table_cell(fpath, "C1", "K1", "C4", "new_c4_val")
-            self.assertTrue(ok, msg)
-
-            lines = fpath.read_text(encoding="utf-8").splitlines()
-            cells = split_table_row(lines[2])
-            self.assertEqual(len(cells), 8)
-            self.assertEqual(cells[0], "K1")
-            self.assertEqual(cells[1], "")
-            self.assertEqual(cells[2], "val3")
-            self.assertEqual(cells[3], "new_c4_val")
-            self.assertEqual(cells[4], "val5")
-            self.assertEqual(cells[5], "val6")
-            self.assertEqual(cells[6], "")
-            self.assertEqual(cells[7], "val8")
+            ok, msg = mutate_table_cell(fpath, "C1", "K1", "C3", "new")
+            self.assertFalse(ok)
+            self.assertIn("C1", msg)
+            self.assertEqual(fpath.read_text(encoding="utf-8"), content, "file must be untouched")
 
     def test_mutate_nonexistent_targets_fails_safely(self):
         """Mutations of non-existent rows, columns, or files must fail gracefully without file corruption."""
@@ -112,12 +120,12 @@ class TestAdversarialInvariantsAndStress(unittest.TestCase):
             # 2. Non-existent key value
             ok, msg = mutate_table_cell(fpath, "#", "Q-999", "Status", "done")
             self.assertFalse(ok)
-            self.assertIn("not found", msg)
+            self.assertIn("Q-999", msg, "the message must name the row it looked for")
 
             # 3. Non-existent column
             ok, msg = mutate_table_cell(fpath, "#", "Q-1", "NonExistentColumn", "done")
             self.assertFalse(ok)
-            self.assertIn("not found", msg)
+            self.assertIn("NonExistentColumn", msg, "the message must name the column at fault")
 
             # Assert file content remained unmodified
             self.assertEqual(fpath.read_text(encoding="utf-8"), content)

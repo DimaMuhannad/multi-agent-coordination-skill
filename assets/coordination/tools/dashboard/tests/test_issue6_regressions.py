@@ -225,3 +225,173 @@ def test_shipped_templates_parse_with_zero_diagnostics():
     parse_questions(ASSETS_COORDINATION / "QUESTIONS.md", diagnostics=diagnostics)
     parse_handoffs(ASSETS_COORDINATION / "HANDOFFS.md", diagnostics=diagnostics)
     assert [str(d) for d in diagnostics] == []
+
+
+# ======================================================================================
+# Mutation safety  (issue #6 part 2 -- the serious half)
+# ======================================================================================
+
+from mutator import (  # noqa: E402
+    append_question,
+    mutate_handoff_status,
+    mutate_table_cell,
+    plan_append_board_row,
+    plan_append_question,
+    plan_table_cell_edit,
+)
+
+MEASUREMENTS_TABLE = (
+    "## Batch 1\n\n"
+    "| # | Question | Owner's answer | Type | Status |\n"
+    "|---|---|---|---|---|\n"
+    "| Q-1 | Real question? | yes | blocking | resolved |\n\n"
+    "## Measurements attached to Q-1\n\n"
+    "| Sample | Value | Unit |\n"
+    "|---|---|---|\n"
+    "| A | 1.5 | THz |\n"
+    "| B | 2.5 | THz |\n"
+)
+
+
+def test_append_question_does_not_touch_an_unrelated_trailing_table(tmp_path):
+    """The reporter's exact corruption.
+
+    Their QUESTIONS.md ends with physical measurements attached to a decision. The old
+    append_question inserted after "the last pipe row in the whole file", landing the new
+    question inside the measurements table.
+    """
+    questions_md = tmp_path / "QUESTIONS.md"
+    questions_md.write_text(MEASUREMENTS_TABLE, encoding="utf-8")
+    measurements_before = MEASUREMENTS_TABLE.split("## Measurements attached to Q-1")[1]
+
+    ok, msg = append_question(questions_md, "A new question?")
+    assert ok is True, msg
+
+    after = questions_md.read_text(encoding="utf-8")
+    assert after.split("## Measurements attached to Q-1")[1] == measurements_before, (
+        "the measurements table must be byte-identical"
+    )
+    rows = parse_questions(questions_md)
+    assert [r["id"] for r in rows] == ["Q-1", "Q-2"]
+    assert rows[1]["question"] == "A new question?"
+
+
+def test_append_question_refuses_when_no_canonical_table_exists(tmp_path):
+    """Refuse rather than guess -- and leave the file untouched."""
+    questions_md = tmp_path / "QUESTIONS.md"
+    content = "| Sample | Value | Unit |\n|---|---|---|\n| A | 1.5 | THz |\n"
+    questions_md.write_text(content, encoding="utf-8")
+
+    ok, msg = append_question(questions_md, "Nowhere to put this")
+    assert ok is False
+    assert "Sample" in msg, "the message must name the headers it actually found"
+    assert questions_md.read_text(encoding="utf-8") == content
+
+
+def test_append_question_builds_the_row_from_the_destination_header(tmp_path):
+    """A reordered table must still receive a correctly-placed row.
+
+    The old code emitted five hardcoded positional cells regardless of the destination.
+    """
+    questions_md = tmp_path / "QUESTIONS.md"
+    questions_md.write_text(
+        "| # | Status | Type | Question | Owner's answer |\n"
+        "|---|---|---|---|---|\n"
+        "| Q-1 | resolved | blocking | First? | yes |\n",
+        encoding="utf-8",
+    )
+    ok, msg = append_question(questions_md, "Second?", q_type="non-blocking", status="open")
+    assert ok is True, msg
+
+    rows = parse_questions(questions_md)
+    added = rows[-1]
+    assert added["question"] == "Second?"
+    assert added["is_open"] is True
+    assert added["is_blocking"] is False
+
+
+def test_empty_header_cell_does_not_match_every_column(tmp_path):
+    """`"" in anything` is True, so the old substring matcher rewrote the wrong column."""
+    board = tmp_path / "BOARD.md"
+    content = "| Role |  | One-line summary |\n|---|---|---|\n| lead | active | doing things |\n"
+    board.write_text(content, encoding="utf-8")
+
+    ok, _msg = mutate_table_cell(board, "Role", "lead", "Status", "idle")
+    assert ok is False
+    assert board.read_text(encoding="utf-8") == content
+
+
+def test_mutate_handoff_status_preserves_trailing_content(tmp_path):
+    """`- **Status:** done (2026-08-27, see ACTIVITY)` must keep its parenthetical.
+
+    The old implementation rebuilt the line from scratch and discarded everything after the
+    keyword.
+    """
+    handoffs = tmp_path / "HANDOFFS.md"
+    handoffs.write_text(
+        "## [2026-08-27] FROM a TO b — Task\n"
+        "- What: something\n"
+        "- **Status:** done (2026-08-27, see ACTIVITY.md)\n",
+        encoding="utf-8",
+    )
+    ok, msg = mutate_handoff_status(handoffs, "2026-08-27", "Task", "open")
+    assert ok is True, msg
+
+    text = handoffs.read_text(encoding="utf-8")
+    assert "- **Status:** open (2026-08-27, see ACTIVITY.md)" in text
+
+
+def test_added_role_lands_inside_the_table_and_reads_back(tmp_path):
+    """Round-trip. BOARD.md ends with prose after the table.
+
+    dashboard.py appended at end-of-file, so the row landed after the prose, where the
+    parser's header tracking resets and the row is dropped -- write and commit both
+    succeeded and the role never appeared.
+    """
+    board = tmp_path / "BOARD.md"
+    board.write_text(
+        "| Role | Status (date) | One-line summary |\n"
+        "|---|---|---|\n"
+        "| ORCH | active (2026-08-27) | coordination |\n"
+        "\n"
+        "A role that has gone quiet does not need its line deleted.\n",
+        encoding="utf-8",
+    )
+    plan = plan_append_board_row(board, "qa", "active", "writing tests")
+    assert plan.ok, plan.message
+    from mutator import apply_plan
+    ok, msg = apply_plan(plan)
+    assert ok, msg
+
+    roles = parse_board(board)
+    assert [r["role"] for r in roles] == ["ORCH", "qa"], "the new row must be readable back"
+    assert board.read_text(encoding="utf-8").rstrip().endswith("deleted."), (
+        "the trailing prose must stay at the end"
+    )
+
+
+def test_plan_never_writes(tmp_path):
+    """Planning must be side-effect free, or the diff shown is not what gets written."""
+    questions_md = tmp_path / "QUESTIONS.md"
+    questions_md.write_text(MEASUREMENTS_TABLE, encoding="utf-8")
+    before = questions_md.read_bytes()
+
+    plan_append_question(questions_md, "Planned only")
+    plan_table_cell_edit(questions_md, "#", "Q-1", "Status", "open")
+    plan_append_board_row(questions_md, "qa")
+
+    assert questions_md.read_bytes() == before
+
+
+def test_plan_diff_matches_what_apply_writes(tmp_path):
+    questions_md = tmp_path / "QUESTIONS.md"
+    questions_md.write_text(MEASUREMENTS_TABLE, encoding="utf-8")
+
+    plan = plan_append_question(questions_md, "Shown to the operator")
+    assert plan.ok
+    assert "Shown to the operator" in plan.diff()
+    assert "Measurements" in plan.target_description or "Batch 1" in plan.target_description
+
+    from mutator import apply_plan
+    apply_plan(plan)
+    assert "".join(plan.new_lines) == questions_md.read_text(encoding="utf-8")
