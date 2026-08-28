@@ -1,0 +1,23 @@
+# Python build artifacts.
+# These must never be tracked: this repo is a skill scaffold whose assets/ tree is copied
+# verbatim into user projects, so a .pyc compiled for one interpreter would ship into a
+# project running a different one.
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test and coverage artifacts.
+.coverage
+.coverage.*
+.pytest_cache/
+htmlcov/
+
+# Written by the cold-start budget step in the CI workflow.
+budget_out.txt
+
+# Role worktrees created by the dashboard / CHARTER.md §5.
+.worktrees/
+
+# Virtualenvs.
+.venv/
+venv/
