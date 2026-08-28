@@ -1,4 +1,8 @@
-# Coordination checks. Copy to .github/workflows/coordination-checks.yml (drop .template).
+# This repository's OWN CI, derived from assets/dot-github/workflows/coordination-checks.yml.template.
+#
+# It differs from the template only in paths: here the scaffold lives under assets/,
+# while an instantiated project has coordination/ and .claude/ at its root. The skill
+# repo previously shipped the template but ran no CI of its own.
 #
 # Mirrors the checks the local hooks already do, on GitHub's runner, so a session that
 # skipped a local hook does not land a broken commit unnoticed.
@@ -69,7 +73,7 @@ jobs:
           # --json gives a stable contract; the previous version grepped raw JSON for the
           # substring "systemMessage", which a role file could contain by accident.
           # $RUNNER_TEMP keeps the output out of the checkout, where it was never cleaned up.
-          python .claude/hooks/check-context-budget.py --json --force \
+          python assets/dot-claude/hooks/check-context-budget.py --json --force \
             > "$RUNNER_TEMP/budget.json"
           python - "$RUNNER_TEMP/budget.json" <<'PY'
           import json, sys
@@ -117,6 +121,6 @@ jobs:
       - name: Run the full suite including the UI layer
         run: |
           python -m pip install --quiet \
-            -r coordination/tools/dashboard/requirements.txt \
-            -r coordination/tools/dashboard/requirements-dev.txt
+            -r assets/coordination/tools/dashboard/requirements.txt \
+            -r assets/coordination/tools/dashboard/requirements-dev.txt
           python -m pytest -q
