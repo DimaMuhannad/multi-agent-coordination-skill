@@ -33,7 +33,7 @@ _ITEM_BADGES = {
     "done": ("🟢", "DONE"),
     "resolved": ("🟢", "RESOLVED"),
     "closed": ("⚪", "CLOSED"),
-    schema.MISSING: ("⚠️", "NO STATUS"),
+    schema.MISSING: ("⚠️", "MISSING"),
 }
 
 _ROLE_BADGES = {

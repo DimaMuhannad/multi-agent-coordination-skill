@@ -105,6 +105,18 @@ Built by coordination dashboard — summarizes number/status/line to jump to.
 """
 
 
+def write_fixture(path: Path, text: str, newline: str = "\n") -> Path:
+    """Write a fixture file with explicit line endings.
+
+    Not Path.write_text(newline=...): that argument only exists on Python 3.10+, and the
+    project's declared floor is 3.9. The 3.9 leg of CI is what caught this -- locally it
+    passed on 3.11, which is exactly why the matrix is there.
+    """
+    with open(path, "w", encoding="utf-8", newline=newline) as handle:
+        handle.write(text)
+    return path
+
+
 @pytest.fixture
 def mock_git_repo(tmp_path: Path) -> Dict[str, Path]:
     """
@@ -125,16 +137,16 @@ def mock_git_repo(tmp_path: Path) -> Dict[str, Path]:
     coord_dir.mkdir(parents=True, exist_ok=True)
 
     board_file = coord_dir / "BOARD.md"
-    board_file.write_text(CANONICAL_BOARD, encoding="utf-8", newline="\n")
+    write_fixture(board_file, CANONICAL_BOARD, "\n")
 
     questions_file = coord_dir / "QUESTIONS.md"
-    questions_file.write_text(CANONICAL_QUESTIONS, encoding="utf-8", newline="\n")
+    write_fixture(questions_file, CANONICAL_QUESTIONS, "\n")
 
     handoffs_file = coord_dir / "HANDOFFS.md"
-    handoffs_file.write_text(CANONICAL_HANDOFFS, encoding="utf-8", newline="\n")
+    write_fixture(handoffs_file, CANONICAL_HANDOFFS, "\n")
 
     index_file = coord_dir / "INDEX.md"
-    index_file.write_text(CANONICAL_INDEX, encoding="utf-8", newline="\n")
+    write_fixture(index_file, CANONICAL_INDEX, "\n")
 
     # Initial commit of coordination files
     subprocess.run(["git", "add", "."], cwd=repo_dir, check=True, capture_output=True)
@@ -236,7 +248,7 @@ def russian_content_files(tmp_path: Path) -> Dict[str, Path]:
     files = {"dir": coord}
     for name, text in (("BOARD", board), ("QUESTIONS", questions), ("HANDOFFS", handoffs)):
         path = coord / f"{name}.md"
-        path.write_text(text, encoding="utf-8", newline="\n")
+        write_fixture(path, text, "\n")
         files[f"{name.lower()}_file"] = path
     return files
 
@@ -276,7 +288,7 @@ def russian_schema_files(tmp_path: Path) -> Dict[str, Path]:
     files = {"dir": coord}
     for name, text in (("BOARD", board), ("QUESTIONS", questions), ("HANDOFFS", handoffs)):
         path = coord / f"{name}.md"
-        path.write_text(text, encoding="utf-8", newline="\n")
+        write_fixture(path, text, "\n")
         files[f"{name.lower()}_file"] = path
     return files
 
@@ -323,13 +335,13 @@ def unicode_markdown_files(tmp_path: Path) -> Dict[str, Path]:
     )
 
     board_file = unicode_dir / "BOARD.md"
-    board_file.write_text(board_content, encoding="utf-8", newline="\n")
+    write_fixture(board_file, board_content, "\n")
 
     questions_file = unicode_dir / "QUESTIONS.md"
-    questions_file.write_text(questions_content, encoding="utf-8", newline="\n")
+    write_fixture(questions_file, questions_content, "\n")
 
     handoffs_file = unicode_dir / "HANDOFFS.md"
-    handoffs_file.write_text(handoffs_content, encoding="utf-8", newline="\n")
+    write_fixture(handoffs_file, handoffs_content, "\n")
 
     return {
         "dir": unicode_dir,

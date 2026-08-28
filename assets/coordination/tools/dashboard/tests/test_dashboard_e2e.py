@@ -187,7 +187,9 @@ def test_e2e_handoff_lifecycle_workflow(mock_git_repo):
     updated_index = parse_index(index_file)
     # Open handoffs count decreased from 2 to 1 (only 'Implement dashboard core' remains taken)
     assert updated_index["handoffs_open_count"] == 1
-    assert updated_index["handoffs_total_count"] == 4
+    # 3, not 4: the fenced format example in the fixture is documentation, and parsers now
+    # skip fenced code blocks instead of reading it as a live entry dated "ISO-date".
+    assert updated_index["handoffs_total_count"] == 3
 
 
 # ============================================================================
@@ -267,7 +269,14 @@ def test_render_status_badge():
     assert "DONE" in render_status_badge("done")
     assert "CLOSED" in render_status_badge("closed")
     assert "MISSING" in render_status_badge("missing")
-    assert "CUSTOM" in render_status_badge("custom")
+
+    # Deliberate change. An unrecognised word used to be echoed back as `🔹 **CUSTOM**`,
+    # which reads exactly like a documented state and is how a Russian `открыт` rendered a
+    # red OPEN badge beside a row the parser had already filed as closed. It is now labelled
+    # UNCLASSIFIED - the word itself is still shown, so nothing is hidden.
+    rendered = render_status_badge("custom")
+    assert "UNCLASSIFIED" in rendered
+    assert "custom" in rendered
 
 
 def test_render_type_badge():
