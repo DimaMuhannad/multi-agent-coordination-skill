@@ -20,6 +20,14 @@ import sys
 DEFAULT_LIMIT = 2400
 DEFAULT_GLOB = "coordination/roles/*.md"
 
+#: Claude Code's own published thresholds for an instruction file, used when a rule gives a
+#: line limit without a byte one. It targets "under 200 lines per CLAUDE.md file" and skips a
+#: file over 4 MiB entirely -- a skip is silent, so the file that most needs to be read is the
+#: one that stops being read. Pinning our defaults to the documented numbers means this hook
+#: warns before that cliff instead of at some limit we invented.
+INSTRUCTION_LINE_TARGET = 200
+INSTRUCTION_HARD_BYTES = 4 * 1024 * 1024
+
 
 def get_project_root(start_dir):
     """Walk up to the project root.
@@ -65,20 +73,25 @@ def load_rules(root):
     """
     config_path = os.path.join(root, ".claude", "hooks", "budget.json")
     if not os.path.exists(config_path):
-        return [(DEFAULT_GLOB, DEFAULT_LIMIT)]
+        return [(DEFAULT_GLOB, DEFAULT_LIMIT, None)]
     try:
         with open(config_path, "r", encoding="utf-8") as handle:
             cfg = json.load(handle)
     except (OSError, ValueError):
-        return [(DEFAULT_GLOB, DEFAULT_LIMIT)]
+        return [(DEFAULT_GLOB, DEFAULT_LIMIT, None)]
 
     rules = []
     for rule in cfg.get("files", []):
         pattern = rule.get("glob")
         if not pattern:
             continue
-        rules.append((pattern, rule.get("limit_bytes", DEFAULT_LIMIT)))
-    return rules or [(DEFAULT_GLOB, DEFAULT_LIMIT)]
+        limit_lines = rule.get("limit_lines")
+        # A rule may set either limit or both. Defaulting the byte limit only when no line
+        # limit was given keeps a lines-only rule from also tripping the 2400-byte default,
+        # which would report every instruction file as oversized the day it was added.
+        default_bytes = INSTRUCTION_HARD_BYTES if limit_lines else DEFAULT_LIMIT
+        rules.append((pattern, rule.get("limit_bytes", default_bytes), limit_lines))
+    return rules or [(DEFAULT_GLOB, DEFAULT_LIMIT, None)]
 
 
 def iter_matches(root, pattern):
@@ -94,12 +107,13 @@ def iter_matches(root, pattern):
 
 
 def measure(path):
-    """Size in bytes with CRLF normalised, or None if the file cannot be read."""
+    """(bytes, lines) with CRLF normalised, or None if the file cannot be read."""
     try:
         with open(path, "rb") as handle:
-            return len(handle.read().replace(b"\r\n", b"\n"))
+            data = handle.read().replace(b"\r\n", b"\n")
     except OSError:
         return None
+    return len(data), data.count(b"\n") + (0 if data.endswith(b"\n") or not data else 1)
 
 
 def should_run(argv_forced):
@@ -140,14 +154,20 @@ def main():
     oversized = []
     unreadable = []
 
-    for pattern, limit in load_rules(root):
+    for pattern, limit, limit_lines in load_rules(root):
         for rel, full in iter_matches(root, pattern):
-            size = measure(full)
-            if size is None:
+            measured = measure(full)
+            if measured is None:
                 # Never silently skip: a role file nobody can read is not a compliant one.
                 unreadable.append(rel)
-            elif size > limit:
-                oversized.append({"file": rel, "bytes": size, "limit": limit})
+                continue
+            size, lines = measured
+            if size > limit:
+                oversized.append({"file": rel, "bytes": size, "limit": limit,
+                                  "unit": "bytes"})
+            elif limit_lines and lines > limit_lines:
+                oversized.append({"file": rel, "bytes": lines, "limit": limit_lines,
+                                  "unit": "lines"})
 
     if args.json:
         print(json.dumps({"oversized": oversized, "unreadable": unreadable}))
@@ -159,7 +179,8 @@ def main():
     parts = []
     if oversized:
         listed = "\n".join(
-            f"  - {item['file']} ({item['bytes']} bytes > {item['limit']} limit)"
+            f"  - {item['file']} ({item['bytes']} {item.get('unit', 'bytes')} > "
+            f"{item['limit']} limit)"
             for item in oversized
         )
         parts.append("[Context budget] Oversized cold-start files:\n" + listed)
