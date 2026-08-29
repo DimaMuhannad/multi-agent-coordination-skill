@@ -57,6 +57,12 @@ the interview — one `roles/<ID>.md` per role the user named. Wire the `Session
 `.claude/settings.json` per `references/setup.md §2`, and verify it actually fires before calling
 the setup done.
 
+**Both `AGENTS.md` and `CLAUDE.md` get created, and the split matters.** The project's actual
+rules go in `AGENTS.md`; `CLAUDE.md` is a thin file whose first line is `@AGENTS.md` plus the
+Claude Code specifics. Claude Code reads `CLAUDE.md` and does *not* read `AGENTS.md`, so if you
+create only one of them, make sure it is `CLAUDE.md` — and if you drop the import line, every
+shared rule silently stops reaching the session. `references/setup.md §1` has the reasoning.
+
 **Keep every `roles/<ID>.md` within its cold-start budget from the very first version.** It's
 tempting to write a thorough first draft with lots of context — resist it. The budget hook will
 catch growth later, but a file that starts oversized normalizes staying oversized.
@@ -83,12 +89,24 @@ covers a role's own conduct, not the scaffold's file layout.
 ### 5. Not Claude-Code-only
 
 A role is held by whatever session reads `coordination/roles/<ID>.md` and makes commits, so the
-scaffold works for Claude Code, Gemini via Antigravity, Cursor, Aider or a human. Two things in
-the templates are Claude Code conveniences, not requirements: `claude -n <name>` for naming a
-session and `claude agents --json` for "who is working right now". If the project uses other
-platforms, say so when filling in `CLAUDE.md` and `CHARTER.md §1`, and note that git is the
-arbiter there — which `CHARTER.md` already says for the cross-machine case. Do NOT add a
-replacement liveness registry; `CONCEPT.md §3.5` explains why that was deliberately excluded.
+scaffold works for Claude Code, Gemini via Antigravity, Cursor, Aider or a human. The file split
+in §2 is what keeps that true in practice rather than only in principle: everything a
+non-Claude session needs is in `AGENTS.md`, which is the cross-vendor convention for exactly
+this and has been governed by the Linux Foundation's Agentic AI Foundation since December 2025.
+
+Claude Code conveniences that belong in `CLAUDE.md`, never in `AGENTS.md`: `claude -n <name>`
+for naming a session, `claude agents --json` for "who is working right now", `.claude/rules/`
+globs, and the hook wiring. On another platform, skip them — git is the arbiter there, which
+`CHARTER.md` already says for the cross-machine case. Do NOT add a replacement liveness
+registry; `CONCEPT.md §3.5` explains why that was deliberately excluded.
+
+**Where the scaffold sits next to a tool's own multi-agent features.** Several tools now ship
+in-session parallelism with a shared task list and inter-agent messaging (Claude Code's
+subagents and agent teams, for instance). Those are *working* memory: their state lives outside
+the repository, is scoped to one session, and is discarded when it ends. The journals are
+*durable* memory. The two are complements, not alternatives — use the tool's teammates freely,
+and write anything that must outlive the session into `HANDOFFS.md`, `QUESTIONS.md` or
+`ACTIVITY.md`. If a user asks whether agent teams replace this scaffold, that is the answer.
 
 ### 6. Optional: git/GitHub rails
 
