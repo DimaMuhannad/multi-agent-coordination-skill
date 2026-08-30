@@ -75,7 +75,10 @@ yet, and say so to the user rather than inventing one.
 After instantiating, tell the user in a few sentences: where the role entry points are, how to
 launch a session, and where the guardrails live — not a full walkthrough of every file, since the
 templates themselves are meant to be self-explanatory reading. Point them at
-`references/rationale.md` if they ask *why* something is shaped a particular way.
+`references/rationale.md` if they ask *why* something is shaped a particular way, and at
+`references/agent-tooling.md` for which platform capabilities (planning, structured questions,
+subagent use, verification, isolation) a role is expected to reach for and when — that file
+covers a role's own conduct, not the scaffold's file layout.
 
 ### 5. Not Claude-Code-only
 
@@ -115,6 +118,14 @@ Those four conditions are what keep it compatible with `docs/ru/CONCEPT.md §6.5
 are written up as §6.6 there. If a project only wants the read-only view, `build_index.py` gives
 it with no dependencies at all.
 
+## Found a bug in the scaffold itself, not just this project's setup
+
+Distinct from the section below: if what a role hits is a defect in a template, hook, or tool
+this skill ships — not a drift in how this particular project configured it — read
+`references/upstream-feedback.md` before quietly patching it locally and moving on. A local patch
+that never leaves the project either gets silently lost on the next re-copy of the scaffold, or
+leaves every other project built from it to rediscover the same bug independently.
+
 ## Reviewing or fixing an existing setup
 
 If the user already has a coordination directory (theirs or one this skill set up before) and
@@ -132,6 +143,14 @@ skill's templates — their setup has presumably diverged for reasons specific t
 - `references/rationale.md` — the failure modes this scaffold's specific shapes were built to
   prevent, and why the fix looks the way it does. Read before removing or simplifying a piece of
   the scaffold.
+- `references/agent-tooling.md` — which capabilities of the agentic system running a role
+  (planning, structured questions, subagent use, verification, isolation) that role is expected
+  to reach for, and in which situations — a role's own conduct, distinct from the scaffold's file
+  layout.
+- `references/upstream-feedback.md` — how to report a defect in the scaffold itself back to this
+  skill instead of only patching it locally: distinguishing scaffold bugs from project-specific
+  drift, marking a local patch until it's accepted upstream, and the report shape that has
+  actually gotten fixes merged.
 - `references/git-github-rails.md` — optional server-side layer (CODEOWNERS, CI checks, when to
   use a real PR instead of a `HANDOFFS.md` entry) for a project that's outgrown pure client-side
   enforcement. Read only when step 5 above applies.

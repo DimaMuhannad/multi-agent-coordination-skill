@@ -18,6 +18,10 @@ coordination/
   LAUNCH_PROMPTS.md
   roles/
     <ID>.md         (one per role, from roles/ROLE_ID.md)
+  prompts/
+    REVIEW.md       (optional — periodic-review prompt, see §4 step 9 and
+                     references/upstream-feedback.md; only once "is this still current"
+                     is a real question for the project)
   tools/
     build_index.py
     kpi_git.py
@@ -105,6 +109,10 @@ Work through them roughly in this order, since later ones reference earlier ones
    append-only logs, not filled-in-once documents.
 8. `ORCH_BRIEF.md` — only if the project has an orchestrator role and standing goals worth
    keeping separate from that role's own cold-start file.
+9. `prompts/REVIEW.md` — optional, usable as-is, no placeholders to fill. Copy it in only once
+   the project has been running long enough that upstream drift and local-patch reconciliation
+   (`references/upstream-feedback.md`) are real questions, not before — same principle as
+   `kpi_config.json` in §5: don't pre-install this speculatively.
 
 ## 5. `build_index.py` and `kpi_git.py`
 
