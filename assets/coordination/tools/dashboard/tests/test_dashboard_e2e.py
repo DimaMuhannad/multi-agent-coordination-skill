@@ -10,6 +10,12 @@ import subprocess
 from unittest.mock import MagicMock, patch
 import pytest
 
+# This module exercises the Streamlit UI layer (dashboard.py, components.py), both of which
+# import streamlit at module scope. Skip the whole file rather than failing collection, so the
+# stdlib-only parser/mutator/git_service suites still run with pytest alone.
+pytest.importorskip("streamlit", reason="dashboard UI layer requires streamlit")
+pytestmark = pytest.mark.streamlit
+
 try:
     from dashboard.dashboard import (
         discover_coordination_dir,

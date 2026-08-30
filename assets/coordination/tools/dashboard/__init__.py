@@ -1,6 +1,13 @@
 """
 Multi-Agent Coordination Interactive Dashboard Package.
-Provides line-preserving markdown parsers, surgical table/block mutators, git isolation service, and Streamlit components.
+Provides line-preserving markdown parsers, surgical table/block mutators, and a git isolation
+service.
+
+Deliberately does NOT re-export .components or .dashboard: both import streamlit at module
+scope, so re-exporting them here would make `import dashboard.anything` require streamlit --
+including the parser and mutator, which are pure stdlib. Import the UI explicitly instead:
+
+    from dashboard.components import render_kpi_bar
 """
 
 from .parser import (
@@ -20,12 +27,6 @@ from .mutator import (
     append_handoff
 )
 from .git_service import GitService
-from .components import (
-    render_kpi_bar,
-    render_status_badge,
-    render_type_badge,
-    render_role_badge
-)
 
 __all__ = [
     "split_table_row",
@@ -40,9 +41,5 @@ __all__ = [
     "mutate_handoff_status",
     "append_question",
     "append_handoff",
-    "GitService",
-    "render_kpi_bar",
-    "render_status_badge",
-    "render_type_badge",
-    "render_role_badge"
+    "GitService"
 ]
