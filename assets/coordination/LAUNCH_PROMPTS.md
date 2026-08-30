@@ -31,6 +31,21 @@ If you want the session to keep working autonomously across multiple steps rathe
 after one, wrap it with your tool's looping mechanism (e.g. Claude Code's `/loop`) instead of
 writing a separate always-keep-going prompt variant here.
 
+### Two things to keep OUT of the nudge
+
+**Don't tell the session to `git clone` the project.** When the repository is already attached to
+the session — the normal case for a cloud or container session started against a repo — a clone
+just re-downloads what is already on disk. Measured: **+157 MB, +3.4 s**, and no information the
+checkout did not already have. An explicit clone earns its place only when a from-scratch
+checkout is the thing being tested (timing a cold provision, verifying container setup), not as a
+default "to be safe".
+
+**Do fetch before trusting `origin`.** If the session needs to know whether work is pushed, the
+answer is `git fetch origin <branch>` on the checkout it already has — cheap, and it is the only
+thing the clone was really providing. `CHARTER.md §4` has the rule and the failure it prevents:
+a stale remote-tracking ref once produced a confident "53 commits at risk of being lost", which
+is precisely the kind of belief that provokes a force-push against a problem that never existed.
+
 ## If your project also uses a different tool/agent (no session names, no `/loop`, etc.)
 
 Note the genuinely different mechanics briefly rather than duplicating the whole table — e.g. "no

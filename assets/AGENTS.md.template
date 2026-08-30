@@ -31,6 +31,11 @@ below.
 > sessions, but that answer covers only that tool's sessions on that machine — it is a
 > convenience, never the source of truth. Don't add locks, heartbeats, or a nickname
 > registry here; git already arbitrates.
+>
+> **And git only arbitrates once you have fetched.** `origin/<branch>` is a cache written when
+> your checkout was prepared; in a container it can predate a push that already landed. Run
+> `git fetch origin <branch>` before drawing any conclusion about what is or is not pushed —
+> `CHARTER.md §4`.
 
 ## Guardrails — breaking these is not easily reversible
 
