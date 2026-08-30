@@ -8,6 +8,18 @@ next time someone re-copies the scaffold's templates into the project, or it nev
 project at all, so every other project built from this scaffold keeps re-discovering and
 re-fixing the same bug independently. This file is the pathway that avoids both.
 
+## 0. The other direction
+
+This file is about sending findings **up**. Receiving fixes back **down** used to have no
+mechanism at all — files were copied into a project and the link was cut, so a fix merged
+upstream reached no project already running the scaffold, including the one that reported it.
+
+`coordination/tools/upgrade.py` is that channel now (`references/setup.md §10`). It matters
+here for a specific reason: §2 below tells you to mark a local patch so it can be
+reconciled later, and §5 tells you to remove it once upstream has the fix. `upgrade.py` is
+how you find out that upstream *has* it — a `both` row on the file you patched is exactly
+the signal that §5 is now due.
+
 ## 1. Is this actually a scaffold bug?
 
 Only worth reporting upstream if it would reproduce in a different project built from the same

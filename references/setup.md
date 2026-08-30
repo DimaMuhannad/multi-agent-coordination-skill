@@ -3,6 +3,42 @@
 Read this when actually instantiating the templates into a project (SKILL.md points here for the
 mechanical steps, so it doesn't have to carry them inline).
 
+## 0. Before anything: read what the repository already knows
+
+Run this first, in the target project, and read the output before asking the owner a single
+question:
+
+```bash
+python3 <this-skill>/assets/coordination/tools/discover.py --root . --json
+```
+
+It writes nothing. It reports the candidate zones (top-level directories crossed with who
+actually edits them, from git history), any existing `CODEOWNERS`, any instruction files
+another agent tool has left behind, the verification commands already defined in
+`package.json` / `Makefile` / CI, a guess at the documentation language with its evidence,
+and whether this scaffold is already installed.
+
+**Why this comes before the interview.** In a new project `CHARTER.md` is a statement of
+intent. In a live one it is archaeological: the codebase already works some way, and the
+scaffold has to describe that rather than overwrite it. Concretely — ask the owner what
+directories exist and who owns them, when `git log` answers both, and you teach them that
+this questionnaire is not worth reading. Then the questions that genuinely need them, the
+ones in §4, get the same treatment.
+
+So: everything `discover.py` found is presented as a **default to confirm**. Only these are
+asked outright, because no amount of evidence settles them — the roles and what each owns,
+whether there is an orchestrator, the project's hard guardrails, the enforcement level
+(§6/§9), and whether work spans several machines.
+
+Two findings change what you do rather than what you ask:
+
+- **An existing `AGENTS.md`, `CLAUDE.md`, `.cursorrules` or `.github/copilot-instructions.md`
+  is imported, never replaced.** Append a section; add `@AGENTS.md` to the top of an
+  existing `CLAUDE.md`. Destroying a project's own agent instructions is the fastest way to
+  make the scaffold unwelcome, and nobody notices until their rules stop applying.
+- **An existing `CODEOWNERS` is already a zone map.** Seed `OWNERSHIP.md` from it rather
+  than from an empty table, then keep the two in step with §6's generator.
+
 ## 1. Directory layout to create
 
 ```
@@ -27,8 +63,12 @@ coordination/
     kpi_git.py
     ownership.py     (renders .github/CODEOWNERS from OWNERSHIP.md — see §6)
     check_rules.py   (validates .claude/rules globs — see §3)
+    discover.py      (read-only reconnaissance, run BEFORE the interview — see §0)
+    upgrade.py       (drift report against a newer scaffold — see §10)
     kpi_config.json  (optional, from kpi_config.json.template — only if the project needs it)
-    coordlib/        (shared, stdlib-only: vocabulary, table tokenizer, diagnostics, ownership)
+    coordlib/        (shared, stdlib-only: vocabulary, table tokenizer, diagnostics,
+                      ownership, install manifest)
+  .scaffold-version  (written at install by `upgrade.py --adopt` — see §10)
     dashboard/       (OPTIONAL add-on — needs streamlit; see §7)
 .claude/
   hooks/
@@ -156,7 +196,20 @@ Work through them roughly in this order, since later ones reference earlier ones
    append-only logs, not filled-in-once documents.
 8. `ORCH_BRIEF.md` — only if the project has an orchestrator role and standing goals worth
    keeping separate from that role's own cold-start file.
-9. `prompts/REVIEW.md` — optional, usable as-is, no placeholders to fill. Copy it in only once
+9. **`upgrade.py --adopt` — the last step, once every file above is in place.** It records
+   `coordination/.scaffold-version`: the hash of every file as installed and of the asset it
+   came from, so a later `upgrade.py` can tell "you changed this" from "upstream changed
+   this" without a network. Skip it and the project is cut off from every future fix.
+
+   ```bash
+   python3 coordination/tools/upgrade.py --adopt --from <this-skill>/assets
+   ```
+
+   Run it **after** the placeholders are filled, not before: the stamp records the filled
+   content as the local baseline, which is what stops your own install showing up as drift
+   forever.
+
+10. `prompts/REVIEW.md` — optional, usable as-is, no placeholders to fill. Copy it in only once
    the project has been running long enough that upstream drift and local-patch reconciliation
    (`references/upstream-feedback.md`) are real questions, not before — same principle as
    `kpi_config.json` in §5: don't pre-install this speculatively.
@@ -317,3 +370,68 @@ misplaced confidence the hook exists to remove. For paths that must never be tou
 use `permissions.deny`. And it governs the sessions that run it — a teammate on another
 machine without the hook installed is unaffected, which is why the generated `CODEOWNERS` plus
 branch protection (§6) is the rail that catches that case.
+
+## 10. Receiving upstream fixes
+
+`references/upstream-feedback.md` covers sending findings up. This is the other direction,
+which the scaffold had no answer for at all: the files were copied in and the link was cut,
+so a fix made upstream reached no project already running it.
+
+```bash
+python3 coordination/tools/upgrade.py --from <newer-skill-checkout>/assets
+```
+
+It works offline — `.scaffold-version` records the pristine hashes, and the newer skill is
+already a directory on disk, since that is how skills are used. It compares three states and
+sorts every file into one bucket:
+
+| Bucket | What it means |
+|---|---|
+| `both` | upstream changed it **and** so did you — **the only rows needing a decision** |
+| `upstream-only` | your copy is untouched; copy the new one across |
+| `new-upstream` | did not exist when you installed |
+| `deleted-locally` | reinstall, or confirm the removal was deliberate |
+| `seed-changed` | a template you filled in has moved upstream; compare and port what applies |
+| `local-only` | yours alone. Listed so you can see your customisations, never a problem |
+
+Exit 0 when nothing needs a person, 1 when a `both` row exists — usable as a CI gate.
+
+**It reports; it does not merge.** A three-way auto-merge of markdown that people have
+edited cannot be done without lying about the result, and a wrong merge of `CHARTER.md` is
+worse than having no upgrade channel. What a human needs is the short list of places a
+decision is actually required.
+
+Two things it deliberately never reports as drift, because getting these wrong makes the
+whole report noise and noise gets ignored:
+
+- **The journals.** `ACTIVITY.md` grows every day by design; so do `HANDOFFS.md`,
+  `QUESTIONS.md` and `BOARD.md`, and `OWNERSHIP.md` changes whenever a zone does.
+- **Line endings.** A checkout with `core.autocrlf=true` changes every byte of every file
+  and none of its content, so hashing normalises CRLF to LF first.
+
+### Adopting a project that predates the stamp
+
+```bash
+python3 coordination/tools/upgrade.py --adopt --from <newer-skill-checkout>/assets
+```
+
+Be clear-eyed about the trade: adoption records **today's** files as the baseline, so every
+edit made before now is frozen in as though it were pristine and can never be recovered by
+any tool. That is unavoidable offline. Two things make it honest rather than silent — the
+command prints the already-diverged files to stderr once, at the only moment they are still
+visible, so read that output; and the stamp records `adopted: true`, so every later report
+says what it cannot see.
+
+## 11. Keeping the generated and the written in step
+
+Three checks worth putting in CI once the scaffold is installed, all read-only, all exiting
+non-zero only on a real disagreement:
+
+```bash
+python3 coordination/tools/ownership.py --map-file owners.json --check   # CODEOWNERS vs OWNERSHIP.md
+python3 coordination/tools/check_rules.py --strict                       # .claude/rules globs
+python3 coordination/tools/upgrade.py --from <skill>/assets              # upstream drift
+```
+
+The first two catch a file and its source of truth drifting apart. The third catches the
+project drifting from upstream. None of them writes anything.

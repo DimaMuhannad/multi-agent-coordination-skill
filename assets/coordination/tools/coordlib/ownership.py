@@ -101,10 +101,24 @@ def _glob_to_regex(pattern: str) -> "re.Pattern":
     return re.compile("".join(out))
 
 
+def strip_leading_dot_slash(path: str) -> str:
+    """Remove a leading `./`, and nothing else.
+
+    NOT `lstrip("./")`, which strips leading `.` and `/` CHARACTERS rather than the prefix
+    and so turns `.github/workflows/ci.yml` into `github/workflows/ci.yml`. A zone written
+    `.github/**` then matched nothing at all: the ownership hook silently permitted writes
+    to it and the generated CODEOWNERS carried a rule covering no files. Dotted top-level
+    directories are ordinary things to own, so this is not an exotic case.
+    """
+    while path.startswith("./"):
+        path = path[2:]
+    return path
+
+
 def matches(pattern: str, rel_path: str) -> bool:
     """True when `rel_path` (repo-relative, `/`-separated) falls under `pattern`."""
-    rel_path = rel_path.replace("\\", "/").lstrip("./")
-    pattern = pattern.replace("\\", "/").lstrip("/")
+    rel_path = strip_leading_dot_slash(rel_path.replace("\\", "/"))
+    pattern = strip_leading_dot_slash(pattern.replace("\\", "/")).lstrip("/")
     if _glob_to_regex(pattern).match(rel_path):
         return True
     # A bare directory name owns its contents even when written without a trailing glob.

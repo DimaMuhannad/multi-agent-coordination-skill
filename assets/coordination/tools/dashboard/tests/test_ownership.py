@@ -131,6 +131,29 @@ def test_glob_semantics(pattern, path, expected):
     assert matches(pattern, path) is expected
 
 
+@pytest.mark.parametrize("pattern,path", [
+    (".github/**", ".github/workflows/ci.yml"),
+    (".github/**", ".github"),
+    (".claude/**", ".claude/hooks/check-context-budget.py"),
+    (".config/app/**", ".config/app/settings.json"),
+])
+def test_zone_on_a_dotted_directory_matches(pattern, path):
+    """Regression: a zone whose top-level directory starts with a dot.
+
+    Normalisation used `lstrip("./")`, which strips leading `.` and `/` CHARACTERS rather
+    than the `./` prefix, so `.github/workflows/ci.yml` became `github/workflows/ci.yml`
+    and a `.github/**` zone matched nothing. The ownership hook therefore permitted writes
+    into `.github/` no matter who owned it, and `ownership.py` emitted a CODEOWNERS rule
+    covering no files -- both failing silently, in the direction of allowing too much.
+    """
+    assert matches(pattern, path) is True
+
+
+def test_leading_dot_slash_is_still_stripped():
+    """The prefix the old code meant to remove must still be removed."""
+    assert matches("docs/**", "./docs/guide.md") is True
+
+
 def test_most_specific_zone_wins(tmp_path):
     path = tmp_path / "OWNERSHIP.md"
     with open(path, "w", encoding="utf-8", newline="\n") as handle:

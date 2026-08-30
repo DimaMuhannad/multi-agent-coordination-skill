@@ -23,9 +23,33 @@ through a task list," this scaffold is overhead — say so and don't set it up.
 
 ## What to do
 
-### 1. Interview the user
+### 1. Run discovery, THEN interview
 
-Don't guess these — they shape every template:
+**First, read what the repository already knows** (`references/setup.md §0`):
+
+```bash
+python3 <this-skill>/assets/coordination/tools/discover.py --root . --json
+```
+
+It writes nothing and reports: candidate zones with who actually edits them (from git
+history), any existing `CODEOWNERS`, instruction files another agent tool left behind, the
+verification commands already defined, a language guess with its evidence, and whether the
+scaffold is already installed.
+
+In an empty repository this returns little and the interview below carries everything. In a
+live one it changes what you ask: in a new project `CHARTER.md` is a statement of intent,
+but in an existing one it is archaeological — the codebase already works some way and the
+scaffold must describe that, not overwrite it.
+
+**Present everything discovery found as a default to confirm, not as a question.** Asking
+what directories exist when `git log` answers it teaches the owner that this questionnaire
+is not worth reading, and then the questions that genuinely need them get skimmed too.
+
+Two findings change what you DO, not what you ask: an existing `AGENTS.md` / `CLAUDE.md` /
+`.cursorrules` is imported, never replaced; an existing `CODEOWNERS` seeds `OWNERSHIP.md`
+instead of an empty table.
+
+**Then ask what evidence cannot settle.** Don't guess these — they shape every template:
 
 - **Project name and what it does** (a sentence or two — goes at the top of `CLAUDE.md`).
 - **Documentation/commit language** — the source project used Russian throughout; yours might be
@@ -56,6 +80,14 @@ in the placeholders (`<PROJECT NAME>`, `<ID>`, `<LANGUAGE>`, role tables, zone d
 the interview — one `roles/<ID>.md` per role the user named. Wire the `SessionStart` hook into
 `.claude/settings.json` per `references/setup.md §2`, and verify it actually fires before calling
 the setup done.
+
+**Record the install stamp as the last step.** Once every placeholder is filled, run
+`python3 coordination/tools/upgrade.py --adopt --from <this-skill>/assets`. It writes
+`coordination/.scaffold-version`, which is what lets a later `upgrade.py` distinguish "the
+project changed this" from "upstream changed this" without a network. Run it *after*
+filling, not before: the stamp records the filled content as the baseline, which is what
+keeps your own install from reading as drift forever. Skip it and the project is cut off
+from every fix made upstream from that day on (`references/setup.md §10`).
 
 **Both `AGENTS.md` and `CLAUDE.md` get created, and the split matters.** The project's actual
 rules go in `AGENTS.md`; `CLAUDE.md` is a thin file whose first line is `@AGENTS.md` plus the
