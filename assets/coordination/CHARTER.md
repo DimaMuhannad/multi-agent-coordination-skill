@@ -62,6 +62,18 @@ handoff.
   after every commit and reports back when trailers didn't parse, do it — a rule enforced by a
   hook stays true; a rule that only lives in this document rots the moment nobody's checking.
 - Commit **only your own paths** — no blind `git add -A`.
+- **`git fetch` before you say anything about `origin`.** A remote-tracking ref is a cache, and
+  in an ephemeral or long-lived container it can predate a push that already landed — including
+  one made by another session or from another machine. Never read `origin/<branch>` and report
+  "unpushed commits" or divergence without refreshing it first:
+  ```
+  git fetch origin <branch>      # then, and only then, compare
+  ```
+  This is not pedantry about accuracy. The danger is what a false diagnosis provokes: a session
+  that believes work is about to be lost reaches for a re-push, a force-push, or branch surgery —
+  against a problem that does not exist. Measured case: two sessions on the same repository at the
+  same moment, one reporting 53 commits at risk and the other 0 ahead / 0 behind. The only
+  difference was the fetch.
 - `git push` — **only with the owner's direct permission**. Never force-push or rewrite history.
 - A shared-file conflict on `main` → don't force it, call the orchestrator.
 - Don't reference commit hashes in coordination docs — link by date + file instead (hashes churn
