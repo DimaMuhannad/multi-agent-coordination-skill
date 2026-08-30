@@ -9,6 +9,12 @@ is the one place a role can find out what the owner already decided without havi
 someone else's conversation. Write both the question **and** the answer here — a queue of
 unanswered questions is only half useful; the point is a durable decision record.
 
+**Status vocabulary:** `open` · `resolved` · `closed`. **Type:** `blocking` · `non-blocking`.
+Both are protocol tokens parsed by tooling and stay English even in a project written in another
+language; the question and answer text is prose and does not (`references/rationale.md`). A word
+outside these lists is reported as unrecognised and counted in neither total — the tools will not
+guess at a translation.
+
 Use one table per batch of related questions (e.g. all questions from one review session), with
 a consistent schema — pick **one** column layout and stick to it project-wide, since
 `coordination/tools/build_index.py` expects a `Status` column by name. If a table genuinely

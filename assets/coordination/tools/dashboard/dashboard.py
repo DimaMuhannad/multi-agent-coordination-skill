@@ -12,6 +12,11 @@ import sys
 from typing import Any, Dict, List, Optional
 import streamlit as st
 
+_TOOLS_DIR = Path(__file__).resolve().parent.parent
+if str(_TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(_TOOLS_DIR))
+import build_index  # noqa: E402
+
 # Add parent directories to sys.path to allow running standalone or as package
 current_dir = Path(__file__).resolve().parent
 if str(current_dir) not in sys.path:
@@ -32,12 +37,10 @@ try:
         append_handoff
     )
     from .git_service import GitService
-    from .components import (
-        render_kpi_bar,
-        render_status_badge,
-        render_type_badge,
-        render_role_badge
-    )
+    from .components import render_kpi_bar
+    from .badges import render_status_badge, render_type_badge, render_role_badge
+    from . import writes as write_gate
+    from .mutator import apply_plan, plan_append_board_row
 except (ImportError, ValueError):
     from parser import (
         parse_board,
@@ -53,12 +56,10 @@ except (ImportError, ValueError):
         append_handoff
     )
     from git_service import GitService
-    from components import (
-        render_kpi_bar,
-        render_status_badge,
-        render_type_badge,
-        render_role_badge
-    )
+    from components import render_kpi_bar
+    from badges import render_status_badge, render_type_badge, render_role_badge
+    import writes as write_gate
+    from mutator import apply_plan, plan_append_board_row
 
 
 def discover_coordination_dir(start_path: Optional[Path] = None) -> Path:
@@ -88,56 +89,17 @@ def discover_coordination_dir(start_path: Optional[Path] = None) -> Path:
 
 
 def rebuild_index_file(coord_dir: Path) -> Path:
-    """Builds or rebuilds INDEX.md summarizing QUESTIONS.md and HANDOFFS.md."""
-    q_file = coord_dir / "QUESTIONS.md"
-    h_file = coord_dir / "HANDOFFS.md"
+    """Rebuild INDEX.md by calling the core generator.
+
+    This used to be a second, divergent implementation: it emitted
+    `| # | Status | Role | Line | Summary |` where build_index.py emits `... | To | ...`,
+    and it had a template concept build_index.py lacked. Same filename, two formats, two
+    sets of counts, depending on which tool last wrote it.
+    """
     index_file = coord_dir / "INDEX.md"
-
-    q_rows = parse_questions(q_file)
-    h_rows = parse_handoffs(h_file)
-
-    q_open = [r for r in q_rows if r.get("is_open", False)]
-    q_closed = [r for r in q_rows if not r.get("is_open", False)]
-    h_open = [r for r in h_rows if r.get("is_open", False) and not r.get("is_template", False)]
-    h_closed = [r for r in h_rows if not r.get("is_open", False) and not r.get("is_template", False)]
-
-    lines: List[str] = [
-        "# INDEX — open items in `QUESTIONS.md` and `HANDOFFS.md`\n",
-        "Built by coordination dashboard — summarizes number/status/line to jump to.\n",
-        f"## QUESTIONS.md — open ({len(q_open)} of {len(q_rows)})\n",
-        "| # | Status | Role | Line | Summary |",
-        "|---|---|---|---|---|"
-    ]
-    for q in q_open:
-        text_summary = q["question"][:80] + "…" if len(q["question"]) > 80 else q["question"]
-        lines.append(f"| `{q['id']}` | {q['status']} | {q.get('who', '')} | [line {q['line']}] | {text_summary} |")
-
-    lines.append(f"\n## HANDOFFS.md — open or missing status ({len(h_open)} of {len(h_rows)})\n")
-    lines.append("| # | Status | Line | Summary |")
-    lines.append("|---|---|---|---|")
-    for h in h_open:
-        title_summary = h["title"][:80] + "…" if len(h["title"]) > 80 else h["title"]
-        lines.append(f"| `{h['date']}` | {h['status']} | [line {h['start_line']}] | {title_summary} |")
-
-    lines.append(f"\n<details><summary>QUESTIONS.md — closed ({len(q_closed)})</summary>\n")
-    lines.append("| # | Status | Role | Line | Summary |")
-    lines.append("|---|---|---|---|---|")
-    for q in q_closed:
-        text_summary = q["question"][:80] + "…" if len(q["question"]) > 80 else q["question"]
-        lines.append(f"| `{q['id']}` | {q['status']} | {q.get('who', '')} | [line {q['line']}] | {text_summary} |")
-    lines.append("\n</details>\n")
-
-    lines.append(f"\n<details><summary>HANDOFFS.md — closed ({len(h_closed)})</summary>\n")
-    lines.append("| # | Status | Line | Summary |")
-    lines.append("|---|---|---|---|")
-    for h in h_closed:
-        title_summary = h["title"][:80] + "…" if len(h["title"]) > 80 else h["title"]
-        lines.append(f"| `{h['date']}` | {h['status']} | [line {h['start_line']}] | {title_summary} |")
-    lines.append("\n</details>\n")
-
-    with open(index_file, "w", encoding="utf-8", newline="\n") as f:
-        f.write("\n".join(lines))
-
+    text, _q_count, _h_count = build_index.build_index_text(str(coord_dir))
+    with open(index_file, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
     return index_file
 
 
@@ -151,9 +113,13 @@ def handle_mutation_and_commit(
     enable_git: bool,
     repo_root: Optional[Path]
 ) -> None:
-    """Performs feedback notification, auto-commit, and UI rerun upon data mutation."""
+    """Report the outcome of an applied mutation, optionally committing it.
+
+    Kept for callers that already applied a change. New code should go through
+    request_write()/render_pending_write() so the operator sees a diff first.
+    """
     if not success:
-        st.error(f"Mutation Failed: {msg}")
+        st.error(f"Mutation failed: {msg}")
         return
 
     st.success(msg)
@@ -167,13 +133,97 @@ def handle_mutation_and_commit(
             repo_root=repo_root
         )
         if res["status"] == "success":
-            st.toast(f"Git Auto-Committed `{res['sha']}`: {commit_msg}", icon="✅")
+            st.toast(f"Committed `{res['sha']}`: {commit_msg}", icon="✅")
+            hint = write_gate.revert_hint(res.get("sha"))
+            if hint:
+                # No undo: git already holds the history, so the recovery path is git's.
+                st.caption(f"To undo: `{hint}`")
         elif res["status"] == "noop":
             st.toast("No file diff detected for git commit.", icon="ℹ️")
         else:
-            st.warning(f"Git Auto-Commit warning: {res.get('message') or res.get('stderr')}")
+            st.warning(f"Commit warning: {res.get('message') or res.get('stderr')}")
 
     st.rerun()
+
+
+def request_write(key: str, plan, commit_msg: str, trailers: Dict[str, str],
+                  author_role: str, diagnostics=None) -> None:
+    """Stage a planned write for confirmation. Writes nothing.
+
+    Nothing reaches disk between here and the operator pressing Apply, and the diff shown
+    is rendered from this same plan - so what is confirmed is exactly what is written.
+    """
+    decision = write_gate.gate(getattr(plan, "ok", False), diagnostics)
+    if not decision:
+        st.error(decision.reason)
+        if getattr(plan, "ok", False) is False and getattr(plan, "message", ""):
+            st.caption(plan.message)
+        return
+
+    st.session_state["pending_write"] = write_gate.PendingWrite(
+        key=key, plan=plan, commit_message=commit_msg,
+        trailers=trailers, author_role=author_role,
+    )
+
+
+def render_pending_write(enable_git: bool, repo_root: Optional[Path]) -> None:
+    """Show the staged diff and require an explicit confirmation before writing."""
+    pending = st.session_state.get("pending_write")
+    if pending is None:
+        return
+
+    with st.container(border=True):
+        st.subheader("Confirm this change")
+        # Naming the destination is the mitigation the reporter actually needed: a new
+        # question used to land in whatever table came last in the file.
+        st.caption(pending.description or "(target not described)")
+        diff = pending.diff
+        if diff:
+            st.code(diff, language="diff")
+        else:
+            st.info("No textual change.")
+
+        commit_this = st.toggle(
+            "Also commit this change to git",
+            value=enable_git,
+            key="confirm_commit_toggle",
+            help="Shown here so the git consequence is visible at the moment of decision.",
+        )
+        reviewed = st.checkbox("I have reviewed the diff above", key="confirm_reviewed")
+
+        col_apply, col_cancel = st.columns(2)
+        with col_apply:
+            if st.button("Apply", type="primary", disabled=not reviewed,
+                         use_container_width=True, key="confirm_apply"):
+                ok, msg = apply_plan(pending.plan)
+                st.session_state.pop("pending_write", None)
+                handle_mutation_and_commit(
+                    ok, msg, pending.plan.path, pending.commit_message,
+                    pending.trailers, pending.author_role,
+                    commit_this, repo_root,
+                )
+        with col_cancel:
+            if st.button("Cancel", use_container_width=True, key="confirm_cancel"):
+                st.session_state.pop("pending_write", None)
+                st.rerun()
+
+
+def render_diagnostics(diagnostics) -> None:
+    """Surface everything the parsers could not interpret, above the numbers.
+
+    A count that silently excludes rows the tool failed to read is worse than an error,
+    because it gets believed.
+    """
+    if not diagnostics:
+        return
+    st.error(
+        f"⚠ {len(diagnostics)} item(s) in the coordination files could not be interpreted. "
+        "They are shown as unclassified, NOT as resolved. Writing to an affected file is "
+        "disabled until it is fixed."
+    )
+    with st.expander(f"Schema diagnostics ({len(diagnostics)})"):
+        for item in diagnostics:
+            st.text(str(item))
 
 
 def main():
@@ -184,44 +234,52 @@ def main():
         initial_sidebar_state="expanded"
     )
 
-    # 1. Sidebar Configuration
-    st.sidebar.title("🤖 Multi-Agent Coordination")
-    st.sidebar.markdown("---")
+    # 1. Settings, in the MAIN column.
+    #
+    # These lived in st.sidebar, which does not render at all under some Streamlit versions
+    # (verified by the issue reporter on 1.62). An unreachable control is strictly worse
+    # than a visible one, and the git auto-commit toggle was both hidden AND defaulted to
+    # on. Nothing here is navigation, so nothing is lost by moving it.
+    st.title("🤖 Multi-Agent Coordination")
+
+    writes_on = write_gate.writes_enabled()
+    if not writes_on:
+        st.caption("🔒 " + write_gate.READ_ONLY_NOTICE)
 
     default_coord_dir = discover_coordination_dir()
-    coord_path_str = st.sidebar.text_input(
-        "📁 Coordination Directory",
-        value=str(default_coord_dir),
-        help="Path containing BOARD.md, QUESTIONS.md, HANDOFFS.md"
-    )
-    coord_dir = Path(coord_path_str).resolve()
+    with st.expander("⚙️ Settings", expanded=False):
+        coord_path_str = st.text_input(
+            "📁 Coordination directory",
+            value=str(default_coord_dir),
+            help="Path containing BOARD.md, QUESTIONS.md, HANDOFFS.md",
+        )
+        coord_dir = Path(coord_path_str).resolve()
+        repo_root = GitService.get_repo_root(coord_dir)
 
-    repo_root = GitService.get_repo_root(coord_dir)
+        board_preview = parse_board(coord_dir / "BOARD.md")
+        # Roles come from BOARD.md. The previous hardcoded list was the source project's
+        # roster shipped inside a template, and a role added through this dashboard never
+        # appeared in it.
+        role_options = write_gate.roles_from_board(board_preview) or ["ORCH"]
+        author_role = st.selectbox(
+            "🎭 Committer role", options=role_options, index=0,
+            help="The role recorded in the commit trailers (CHARTER.md §4)",
+        )
 
-    # Committer Role & Auto-Commit Options
-    author_role = st.sidebar.selectbox(
-        "🎭 Committer Role",
-        options=["ORCH", "frontend", "physics", "qa_tester", "architect", "owner"],
-        index=0,
-        help="The active agent role recording the change"
-    )
+        enable_git = st.toggle(
+            "⚡ Commit changes to git",
+            value=False,
+            disabled=not writes_on,
+            help="Off by default. Each write also asks again at confirmation time.",
+        )
 
-    enable_git = st.sidebar.checkbox(
-        "⚡ Enable Git Auto-Commit",
-        value=True,
-        help="Automatically create isolated git commits with CHARTER trailers on state mutation"
-    )
+        if repo_root:
+            st.success(f"Git root: `{repo_root.name}`")
+        else:
+            st.warning("No git repository detected")
 
-    if repo_root:
-        st.sidebar.success(f"Git Root: `{repo_root.name}`")
-    else:
-        st.sidebar.warning("No Git repository detected")
-
-    if st.sidebar.button("🔄 Refresh Data", use_container_width=True):
-        st.rerun()
-
-    st.sidebar.markdown("---")
-    st.sidebar.caption("Multi-Agent Coordination Tooling • Antigravity Ecosystem")
+        if st.button("🔄 Refresh data"):
+            st.rerun()
 
     # 2. File Paths
     board_file = coord_dir / "BOARD.md"
@@ -230,9 +288,12 @@ def main():
     index_file = coord_dir / "INDEX.md"
 
     # 3. Parse Active Coordination State
-    board_data = parse_board(board_file)
-    questions_data = parse_questions(questions_file)
-    handoffs_data = parse_handoffs(handoffs_file)
+    diagnostics: List[Any] = []
+    board_data = parse_board(board_file, diagnostics=diagnostics)
+    questions_data = parse_questions(questions_file, diagnostics=diagnostics)
+    handoffs_data = parse_handoffs(handoffs_file, diagnostics=diagnostics)
+    render_diagnostics(diagnostics)
+    render_pending_write(enable_git, repo_root)
     index_data = parse_index(index_file)
     worktrees_data = parse_worktrees(repo_root)
 
@@ -275,14 +336,16 @@ def main():
 
         st.markdown("---")
         with st.expander("✏️ Update Role Status & Summary", expanded=False):
-            existing_roles = [r["role"] for r in board_data] if board_data else ["ORCH", "frontend", "physics", "qa_tester"]
+            # Roles come from BOARD.md. The old fallback listed the source project's own
+            # roles, so a project with an empty board was offered someone else's roster.
+            existing_roles = write_gate.roles_from_board(board_data) or ["ORCH"]
             target_role = st.selectbox("Select Role to Update", options=existing_roles)
             new_role_status = st.selectbox("Status", options=["active", "idle", "stale", "blocked"], index=0)
             today_str = datetime.now().strftime("%Y-%m-%d")
             status_date_input = st.text_input("Status Date", value=today_str)
             new_summary = st.text_input("One-line Summary", placeholder="What this role is doing right now...")
 
-            if st.button("💾 Update Role & Commit", key="btn_update_role"):
+            if st.button("💾 Update Role & Commit", key="btn_update_role", disabled=not writes_on):
                 combined_status = f"{new_role_status} ({status_date_input})"
                 ok, msg = mutate_table_cell(
                     file_path=board_file,
@@ -292,13 +355,18 @@ def main():
                     new_val=combined_status
                 )
                 if ok and new_summary.strip():
-                    mutate_table_cell(
+                    # The result of this second write used to be discarded, so a summary
+                    # column that was renamed or missing failed silently while the UI
+                    # reported the first write's success.
+                    ok_summary, msg_summary = mutate_table_cell(
                         file_path=board_file,
                         key_col="Role",
                         key_val=target_role,
                         target_col="One-line summary",
                         new_val=new_summary.strip()
                     )
+                    if not ok_summary:
+                        ok, msg = False, f"status updated but summary failed: {msg_summary}"
 
                 commit_subject = f"[{target_role}] update status: {new_role_status}"
                 trailers = {
@@ -320,32 +388,28 @@ def main():
             new_role_id = st.text_input("New Role ID (e.g. documentation, devops)")
             new_role_initial_status = st.selectbox("Initial Status", options=["active", "idle"], key="new_role_status")
             new_role_summary = st.text_input("Initial Summary", key="new_role_summary")
-            if st.button("➕ Add Role to Board", key="btn_add_role"):
+            if st.button("➕ Add Role to Board", key="btn_add_role", disabled=not writes_on):
                 if new_role_id.strip():
-                    # Format new line and append to table
-                    combined_status = f"{new_role_initial_status} ({datetime.now().strftime('%Y-%m-%d')})"
-                    with open(board_file, "r", encoding="utf-8", newline="") as bf:
-                        b_lines = bf.readlines()
-                    b_ending = "\r\n" if any(l.endswith("\r\n") for l in b_lines) else "\n"
-                    new_row = f"| {new_role_id.strip()} | {combined_status} | {new_role_summary.strip() or 'Initial registration'} |{b_ending}"
-                    
-                    # Insert before empty lines at bottom or append
-                    b_lines.append(new_row)
-                    with open(board_file, "w", encoding="utf-8", newline="") as bf:
-                        bf.writelines(b_lines)
-                    
-                    commit_subject = f"[{author_role}] Register new role {new_role_id.strip()}"
-                    trailers = {"Session": "dashboard", "Reason": "Registered role in BOARD.md"}
-                    handle_mutation_and_commit(
-                        success=True,
-                        msg=f"Registered role {new_role_id.strip()}",
-                        target_file=board_file,
-                        commit_msg=commit_subject,
-                        trailers=trailers,
-                        author_role=author_role,
-                        enable_git=enable_git,
-                        repo_root=repo_root
+                    # Through the mutator, which inserts INSIDE the board table. The
+                    # previous raw append put the row at end-of-file - after the prose that
+                    # follows the table in BOARD.md - where the parser's header tracking
+                    # resets and the row is dropped. Write and commit both succeeded and
+                    # the role never appeared.
+                    plan = plan_append_board_row(
+                        board_file,
+                        role=new_role_id.strip(),
+                        status=new_role_initial_status,
+                        summary=new_role_summary.strip() or "Initial registration",
                     )
+                    request_write(
+                        key="add_role",
+                        plan=plan,
+                        commit_msg=f"[{author_role}] Register new role {new_role_id.strip()}",
+                        trailers={"Session": "dashboard", "Reason": "Registered role in BOARD.md"},
+                        author_role=author_role,
+                        diagnostics=diagnostics,
+                    )
+                    st.rerun()
 
     # -------------------------------------------------------------------------
     # TAB 2: Decision Queue / Questions
@@ -407,7 +471,7 @@ def main():
                                 options=["resolved", "closed", "open"],
                                 index=0
                             )
-                            if st.button(f"💾 Record Decision for {q['id']}", key=f"btn_res_{q['id']}"):
+                            if st.button(f"💾 Record Decision for {q['id']}", key=f"btn_res_{q['id']}", disabled=not writes_on):
                                 ok1, m1 = mutate_table_cell(
                                     file_path=questions_file,
                                     key_col="#",
@@ -415,14 +479,19 @@ def main():
                                     target_col="Status",
                                     new_val=q_new_status
                                 )
-                                if ans_text.strip():
-                                    mutate_table_cell(
+                                if ok1 and ans_text.strip():
+                                    # Result checked: a renamed or missing answer column
+                                    # used to fail silently while the UI reported success
+                                    # from the status write above.
+                                    ok2, m2 = mutate_table_cell(
                                         file_path=questions_file,
                                         key_col="#",
                                         key_val=q["id"],
                                         target_col="Owner's answer",
                                         new_val=ans_text.strip()
                                     )
+                                    if not ok2:
+                                        ok1, m1 = False, f"status updated but answer failed: {m2}"
                                 commit_subject = f"[{author_role}] Resolve {q['id']}: {q['question'][:50]}"
                                 trailers = {
                                     "Session": "dashboard",
@@ -445,7 +514,7 @@ def main():
             new_q_type = st.radio("Question Type", options=["blocking", "non-blocking"], horizontal=True)
             new_q_default = st.text_input("Default / Recommendation (if non-blocking)", placeholder="e.g. Default to Canvas2D")
 
-            if st.button("➕ Submit Question & Commit", key="btn_post_q"):
+            if st.button("➕ Submit Question & Commit", key="btn_post_q", disabled=not writes_on):
                 if new_q_text.strip():
                     ans_initial = f"Took default: {new_q_default.strip()}" if (new_q_type == "non-blocking" and new_q_default.strip()) else "—"
                     ok, msg = append_question(
@@ -499,7 +568,7 @@ def main():
                     act_col1, act_col2 = st.columns(2)
                     with act_col1:
                         if h["status"] == "open":
-                            if st.button("🚀 Take Handoff", key=f"btn_take_{h['start_line']}"):
+                            if st.button("🚀 Take Handoff", key=f"btn_take_{h['start_line']}", disabled=not writes_on):
                                 ok, msg = mutate_handoff_status(
                                     file_path=handoffs_file,
                                     date=h["date"],
@@ -519,7 +588,7 @@ def main():
                                     repo_root=repo_root
                                 )
                     with act_col2:
-                        if st.button("✅ Mark Done", key=f"btn_done_{h['start_line']}"):
+                        if st.button("✅ Mark Done", key=f"btn_done_{h['start_line']}", disabled=not writes_on):
                             ok, msg = mutate_handoff_status(
                                 file_path=handoffs_file,
                                 date=h["date"],
@@ -550,7 +619,7 @@ def main():
                     st.markdown(f"**Status:** {render_status_badge(h['status'])}")
                     st.caption(f"Done criterion: {h['done_when']}")
 
-                    if st.button("↩️ Reopen", key=f"btn_reopen_{h['start_line']}"):
+                    if st.button("↩️ Reopen", key=f"btn_reopen_{h['start_line']}", disabled=not writes_on):
                         ok, msg = mutate_handoff_status(
                             file_path=handoffs_file,
                             date=h["date"],
@@ -582,7 +651,7 @@ def main():
             new_h_context = st.text_area("Context", placeholder="Why this role can't do it (zone boundary), relevant links")
             new_h_done_when = st.text_input("Done When", placeholder="Concrete, checkable criterion (e.g. test passes)")
 
-            if st.button("➕ Submit Handoff & Commit", key="btn_create_handoff"):
+            if st.button("➕ Submit Handoff & Commit", key="btn_create_handoff", disabled=not writes_on):
                 if new_h_title.strip() and new_h_to.strip():
                     ok, msg = append_handoff(
                         file_path=handoffs_file,
@@ -628,8 +697,11 @@ def main():
                         if wt.get("is_main"):
                             st.caption("⭐️ **Primary Repository Root**")
                     with wt_c2:
-                        st.markdown(f"**Branch:** `{wt['branch']}`")
-                        st.caption(f"HEAD: `{wt['head'][:7]}`")
+                        # .get(): a bare worktree's porcelain block carries no branch or
+                        # HEAD line, and subscripting raised KeyError on it.
+                        st.markdown(f"**Branch:** `{wt.get('branch') or '(detached)'}`")
+                        head = wt.get("head") or ""
+                        st.caption(f"HEAD: `{head[:7] or '-'}`")
                     with wt_c3:
                         if wt.get("role"):
                             st.markdown(f"Role: `{wt['role']}`")
@@ -639,12 +711,15 @@ def main():
         st.markdown("---")
         with st.expander("🚀 Launch Worktree for Agent Role", expanded=False):
             wt_role_input = st.text_input("Role to launch (e.g. qa_tester, physics, frontend)")
-            if st.button("🚀 Create Worktree", key="btn_create_wt"):
+            if st.button("🚀 Create Worktree", key="btn_create_wt", disabled=not writes_on):
                 if wt_role_input.strip():
                     res = GitService.create_worktree(wt_role_input.strip(), repo_root=repo_root)
                     if res["status"] == "success":
                         st.success(f"Worktree created at `{res['path']}` for branch `{res['branch']}`")
-                        st.info(f"Terminal Command: `cd assets/.worktrees/{wt_role_input.strip()} && claude`")
+                        # Show the resolved path git actually created, not a guess. The
+                        # previous hint hardcoded assets/.worktrees/, which only exists in
+                        # this skill repo's own layout.
+                        st.info(f"Terminal command: `cd {res['path']} && claude`")
                     elif res["status"] == "noop":
                         st.info(res["message"])
                     else:
@@ -660,7 +735,7 @@ def main():
 
         i_col1, i_col2 = st.columns([3, 1])
         with i_col2:
-            if st.button("⚡ Rebuild INDEX.md", key="btn_rebuild_index", use_container_width=True):
+            if st.button("⚡ Rebuild INDEX.md", key="btn_rebuild_index", disabled=not writes_on, use_container_width=True):
                 rebuilt_file = rebuild_index_file(coord_dir)
                 commit_subject = f"[{author_role}] Rebuild INDEX.md"
                 trailers = {"Session": "dashboard", "Reason": "Rebuilt backlog index"}

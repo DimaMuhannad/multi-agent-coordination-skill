@@ -20,6 +20,38 @@ them as open, or vice versa.
 first entry, not "once it starts causing problems" — by the time it's causing problems, you
 already have months of entries to retroactively fix.
 
+## Status keywords are protocol tokens, not prose
+
+The section above is about *phrasing* drift. This one is about *language*, and until now the
+scaffold only implied its own rule.
+
+Write everything a human reads in whatever language the project uses: questions, answers,
+summaries, handoff bodies, role descriptions, commit subjects. But these stay English, in every
+project, because tooling parses them:
+
+- statuses — `open`, `taken`, `done`, `resolved`, `closed`
+- question types — `blocking`, `non-blocking`
+- board statuses — `active`, `idle`, `stale`, `blocked`
+- the table headers themselves — `#`, `Question`, `Owner's answer`, `Type`, `Status`, `Role`,
+  `Status (date)`, `One-line summary`
+
+The docs already argued this by example — `Статус:` is cited three times as *the* failure — but
+never said it plainly, and a dashboard was then built that accepted Cyrillic *headers* while
+classifying Cyrillic *values* as closed. That combination is worse than either choice alone: a
+Russian board parsed into rows that were all silently counted inactive, and a Russian question
+journal reported "Open Questions: 0" while showing red OPEN badges beside the rows it had just
+excluded.
+
+**The tools do not guess at a translation.** An unrecognised status is reported as
+`unknown-status` and counted in neither the open nor the closed totals; an unrecognised header
+set is reported as `unknown-table-schema` and its rows are not read at all. Both appear in
+`INDEX.md` under "Unrecognised", on stderr from `build_index.py`, and in the dashboard above the
+counts — and a file with an unreadable schema is refused for writing, because a tool that could
+not read a file must not write to it.
+
+If that feels strict, the alternative is the failure this file exists to record: numbers that are
+quietly wrong get believed, and nobody's job is to notice.
+
 ## `LAUNCH_PROMPTS.md` duplication drift
 
 The source project's launch-prompt file grew to duplicate each role's full zone description,
