@@ -33,6 +33,13 @@ it hit along the way. Those problems — and why the fix looks the way it does �
 - **`.claude/hooks/check-context-budget.py`** — a `SessionStart` hook that warns (never blocks)
   when a role's cold-start file grows past its byte budget, so "keep this file short" stays true
   without anyone having to remember to check.
+- **`coordination/tools/discover.py`** — read-only reconnaissance run *before* the setup
+  interview: candidate zones from who actually edits what in git history, existing
+  `CODEOWNERS` and agent instruction files to import rather than overwrite, the verification
+  commands already defined. So the questionnaire asks only what the repository cannot answer.
+- **`coordination/tools/upgrade.py`** — the delivery channel a copied-in scaffold otherwise
+  lacks. Compares what you installed, what you changed, and a newer version of the skill, and
+  reports where a human is actually needed. It reports; it does not merge.
 - **`coordination/tools/coordlib/`** — the shared, stdlib-only core: one status vocabulary, one
   markdown-table tokenizer, and the diagnostics channel the tools use to say "this file's schema
   was not recognised" instead of quietly reporting zero.
