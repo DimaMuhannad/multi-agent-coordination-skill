@@ -165,3 +165,58 @@ def test_finds_the_root_from_a_subdirectory_of_a_git_worktree(project, tmp_path)
     assert any(item["file"].endswith("BIG.md") for item in payload["oversized"]), (
         "the hook must find the worktree root from a subdirectory"
     )
+
+
+# ---------------------------------------------------------------------------------------
+# Line limits for instruction files
+#
+# Byte limits suit role files, which are budgeted in tokens. Instruction files are budgeted
+# by Claude Code in LINES ("target under 200 lines per CLAUDE.md file"), with a 4 MiB hard
+# cliff past which the file is skipped entirely and silently. Warning in the documented unit
+# is the point: a limit we invented ourselves would drift from the one that actually bites.
+# ---------------------------------------------------------------------------------------
+
+def _write_budget_json(project, payload):
+    path = project / ".claude" / "hooks" / "budget.json"
+    with open(path, "w", encoding="utf-8", newline="\n") as handle:
+        json.dump(payload, handle)
+
+
+def test_line_limit_reports_in_lines_not_bytes(project):
+    _write_budget_json(project, {"files": [
+        {"glob": "AGENTS.md", "limit_lines": 200, "limit_bytes": 4194304},
+    ]})
+    with open(project / "AGENTS.md", "w", encoding="utf-8", newline="\n") as handle:
+        handle.write("line\n" * 250)
+
+    result = _run(project, '{"source":"startup"}', "--json", "--force")
+    assert result.returncode == 0, result.stderr
+    oversized = json.loads(result.stdout)["oversized"]
+    assert [(item["file"], item["bytes"], item["unit"]) for item in oversized] == [
+        ("AGENTS.md", 250, "lines")
+    ]
+
+
+def test_line_limited_file_is_not_also_judged_by_the_role_byte_default(project):
+    """A lines-only rule must not inherit the 2400-byte role budget.
+
+    Instruction files are legitimately larger than a role file. Falling back to the role
+    default would flag every CLAUDE.md the moment the rule was added, and a warning that
+    always fires is a warning nobody reads.
+    """
+    _write_budget_json(project, {"files": [{"glob": "AGENTS.md", "limit_lines": 200}]})
+    with open(project / "AGENTS.md", "w", encoding="utf-8", newline="\n") as handle:
+        handle.write("x" * 9000 + "\n")
+
+    result = _run(project, '{"source":"startup"}', "--json", "--force")
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["oversized"] == []
+
+
+def test_line_limit_within_budget_is_silent(project):
+    _write_budget_json(project, {"files": [{"glob": "AGENTS.md", "limit_lines": 200}]})
+    with open(project / "AGENTS.md", "w", encoding="utf-8", newline="\n") as handle:
+        handle.write("line\n" * 10)
+
+    result = _run(project, '{"source":"startup"}', "--json", "--force")
+    assert json.loads(result.stdout)["oversized"] == []

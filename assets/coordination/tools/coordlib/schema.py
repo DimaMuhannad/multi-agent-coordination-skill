@@ -177,6 +177,9 @@ _COLUMN_ALIASES = {
     "answer": ("owner's answer", "answer"),
     "type": ("type",),
     "line": ("line",),
+    "path": ("path",),
+    "owner": ("owner",),
+    "others": ("others",),
 }
 
 _ALIAS_TO_KEY = {alias: key for key, aliases in _COLUMN_ALIASES.items() for alias in aliases}
@@ -211,6 +214,7 @@ def resolve_headers(cells: Sequence[str]):
 #: `append_question` uses this to pick its destination instead of "last table in the file".
 QUESTIONS_TABLE_SIGNATURE = frozenset({"id", "question", "status"})
 BOARD_TABLE_SIGNATURE = frozenset({"role", "status"})
+OWNERSHIP_TABLE_SIGNATURE = frozenset({"path", "owner"})
 
 
 def matches_signature(resolved_headers, signature) -> bool:

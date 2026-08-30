@@ -25,19 +25,45 @@ coordination/
   tools/
     build_index.py
     kpi_git.py
+    ownership.py     (renders .github/CODEOWNERS from OWNERSHIP.md — see §6)
+    check_rules.py   (validates .claude/rules globs — see §3)
     kpi_config.json  (optional, from kpi_config.json.template — only if the project needs it)
-    coordlib/        (shared, stdlib-only: vocabulary, table tokenizer, diagnostics)
+    coordlib/        (shared, stdlib-only: vocabulary, table tokenizer, diagnostics, ownership)
     dashboard/       (OPTIONAL add-on — needs streamlit; see §7)
 .claude/
   hooks/
     check-context-budget.py
+    check-path-ownership.py   (optional but recommended — see §9)
     budget.json      (from budget.json.template)
   rules/
-    <topic>.md        (optional, path-scoped — see references/setup.md §3)
+    <topic>.md        (optional, path-scoped — see §3)
+AGENTS.md             (from AGENTS.md.template, at repo root)
 CLAUDE.md             (from CLAUDE.md.template, at repo root)
 archive/
   README.md
 ```
+
+### Why the instructions are split across two files
+
+`AGENTS.md` holds everything that is true regardless of which agent tool is driving the
+session; `CLAUDE.md` holds the Claude Code specifics and pulls the other in with a single
+`@AGENTS.md` line on its first line.
+
+That import is not decoration. **Claude Code reads `CLAUDE.md` and does not read
+`AGENTS.md`** — delete the import and every vendor-neutral instruction silently stops
+reaching the session, with no error anywhere. (`ln -s AGENTS.md CLAUDE.md` is the documented
+alternative when you have nothing Claude-specific to add, but it needs Administrator
+privileges or Developer Mode on Windows, so the import is the portable choice.)
+
+The split is worth the second file because `AGENTS.md` is the one genuinely cross-vendor
+convention in this area: since December 2025 it is governed by the Linux Foundation's
+Agentic AI Foundation, alongside MCP. A project whose substance lives there can be driven by
+another tool tomorrow without rewriting its coordination rules — which is the whole premise
+of `docs/ru/CROSS_PLATFORM_BRIDGE.md`.
+
+Keep the boundary clean in both directions: a `claude ...` command in `AGENTS.md` is an
+instruction other agents cannot follow, and duplicating the shared rules into `CLAUDE.md`
+recreates the drift the split exists to prevent.
 
 ## 2. Wiring the SessionStart hook
 
@@ -89,6 +115,27 @@ that never touch those paths, without losing the content for roles that do.
 Don't use it for: anything every role needs regardless of what they touch (that's `CLAUDE.md`),
 or a repeatable *procedure* you invoke by name or that should trigger on a task description
 rather than a file path (that's a Skill).
+
+### The three glob rules that fail silently
+
+Every one of these makes the rule you wrote stop loading, with no error anywhere — which is
+why `coordination/tools/check_rules.py` exists. Run it after editing any rule file, and in CI
+with `--strict`:
+
+```bash
+python3 coordination/tools/check_rules.py --strict
+```
+
+1. **`[` starts a bracket expression.** A `[` that can't be read as one makes the pattern
+   invalid: it matches nothing, while the rule's *other* patterns keep working — so a rule
+   can be half-live and look fine. A literal bracket must be escaped: `photos \[2024/**`.
+   Mind the quoting: a double-quoted YAML scalar processes escapes and needs `"photos
+   \\[2024/**"`, a single-quoted one processes none and needs `'photos \[2024/**'`.
+2. **Brace expansion has a budget.** A rule's whole `paths:` list shares 1,000 expanded
+   patterns and 4 MiB, and each group multiplies: `{a,b}/{c,d}/*.{ts,tsx}` is eight. Over
+   budget, the pattern is used *unexpanded* and its literal braces then match no files.
+3. **`paths: []` is not the same as no `paths:` key.** An empty list matches nothing; a
+   missing key loads the rule unconditionally. Opposite outcomes from a one-character edit.
 
 ## 4. Populating the templates for your project
 
@@ -151,10 +198,22 @@ pre-populate it speculatively.
 Only do this once `references/git-github-rails.md` §"when this earns its place" actually applies
 — it's an add-on, not part of the base setup in §1–5 above.
 
-1. **CODEOWNERS.** Copy `assets/dot-github/CODEOWNERS.template` to `.github/CODEOWNERS`. Fill in
-   every `<...>_GITHUB_USER>` placeholder with a real GitHub username or team, mirroring
-   `OWNERSHIP.md`'s zones exactly (same paths, same owners) — the two files describing the same
-   fact differently is exactly the kind of drift `references/rationale.md` warns about elsewhere.
+1. **CODEOWNERS.** Don't hand-copy the template — generate it, so the two files describing the
+   same fact can't describe it differently (exactly the drift `references/rationale.md` warns
+   about elsewhere):
+
+   ```bash
+   python3 coordination/tools/ownership.py --map ORCH=@alice --map qa=@bob -o .github/CODEOWNERS
+   ```
+
+   Roles you don't map still get a line, with the template's `@<ROLE_GITHUB_USER>` placeholder
+   — a *missing* line would read as "this path has no owner", which is the opposite of true.
+   For more than a couple of roles, put the mapping in a JSON file and pass `--map-file`.
+   Add `python3 coordination/tools/ownership.py --map-file owners.json --check` to CI: it exits
+   1 when `.github/CODEOWNERS` has drifted from `OWNERSHIP.md`.
+
+   `assets/dot-github/CODEOWNERS.template` stays as the hand-written fallback and as
+   documentation of what the output means.
 
 2. **CI checks.** Copy `assets/dot-github/workflows/coordination-checks.yml.template` to
    `.github/workflows/coordination-checks.yml` (drop the `.template` suffix). No placeholders to
@@ -171,3 +230,90 @@ Only do this once `references/git-github-rails.md` §"when this earns its place"
    see the caveat in `references/git-github-rails.md`). If doing this programmatically via `gh api`
    or the REST API, the token needs admin-level access to the repo; if it doesn't, this is a
    30-second manual step, not a blocker for the rest of the setup.
+
+## 7. Optional: the Streamlit dashboard
+
+The only part of this scaffold with a third-party dependency, and the only part that is not
+required. Everything in §1–6 is stdlib-only markdown and Python; the dashboard is an add-on in
+the same sense as the git/GitHub rails.
+
+```bash
+pip install -r coordination/tools/dashboard/requirements.txt
+streamlit run coordination/tools/dashboard/dashboard.py
+```
+
+It opens **read-only**. Writing is opt-in and off by default:
+
+```bash
+COORDINATION_DASHBOARD_WRITES=1 streamlit run coordination/tools/dashboard/dashboard.py
+```
+
+That default is not timidity — `docs/ru/CONCEPT.md` §6.5 states the invariant that the
+interface is a read-only projection over git, and §6.6 lists the four conditions under which
+writing does not violate it. Skip the dashboard entirely if the project doesn't want a Python
+service; `build_index.py` covers the same status question with no dependencies at all.
+
+## 8. Protocol tokens stay English
+
+The status and type keywords are parsed by tooling: `open` · `taken` · `done` · `resolved` ·
+`closed` · `blocking` · `non-blocking` · `active` · `idle` · `stale` · `blocked`, plus the
+table headers. They stay English even in a project written in another language. Questions,
+answers, summaries and handoff prose go in the project's own language — that half is not
+parsed by anything.
+
+The tools do **not** guess at a translation. A word outside the documented vocabulary is
+reported as unrecognised and counted in neither total, and the file carrying it is marked
+read-only in the dashboard. The alternative — accepting a Russian `открыт` as "open" — was
+tried and is exactly how a journal reported "Open Questions: 0" and was believed; see
+`references/rationale.md`.
+
+## 9. Optional: enforcing OWNERSHIP.md instead of just documenting it
+
+"Work only in your own zone" is an instruction, and Claude Code's documentation is explicit
+that instruction files are context rather than configuration: *"Claude treats them as context,
+not enforced configuration. To block an action regardless of what Claude decides, use a
+PreToolUse hook instead."* `check-path-ownership.py` is that hook.
+
+Copy it to `.claude/hooks/` and register it:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/check-path-ownership.py"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Then give each session its role: `COORDINATION_ROLE=<ID> claude`.
+
+**Without that variable the hook does nothing at all.** That is deliberate — a coordination
+aid that halts real work when it is misconfigured gets deleted within a day — but it does mean
+a silent no-op is the failure mode, so verify once with synthetic input the same way §2
+verifies the budget hook:
+
+```bash
+echo '{"tool_name":"Edit","cwd":"'"$PWD"'","tool_input":{"file_path":"'"$PWD"'/coordination/BOARD.md"}}' \
+  | COORDINATION_ROLE=not-the-owner python .claude/hooks/check-path-ownership.py
+```
+
+You should get back a JSON object with `"permissionDecision": "deny"`. Nothing printed means
+the hook is inert — usually a missing `OWNERSHIP.md`, a matrix that still has only template
+rows, or `coordination/tools/coordlib/` not copied across.
+
+**What it does not cover, stated plainly.** It inspects file-writing tools only. A `Bash`
+command that writes is *not* caught: deciding whether `make build` lands in someone else's
+zone means predicting a shell, and a check that is right most of the time invites exactly the
+misplaced confidence the hook exists to remove. For paths that must never be touched at all,
+use `permissions.deny`. And it governs the sessions that run it — a teammate on another
+machine without the hook installed is unaffected, which is why the generated `CODEOWNERS` plus
+branch protection (§6) is the rail that catches that case.

@@ -9,13 +9,22 @@
 Role ID (see `PROJECT.md` for the roster) is set at launch. Not set — **ask the owner**, don't
 work anonymously.
 
-At start: name the session (`claude -n <session-name>` or `/rename`); once, check
-`claude agents --json` — if a session with your name is already `busy` in this `cwd`, don't
-start, tell the owner. There are no locks, timeouts, or heartbeat files in this project — a
-process registry duplicates what `claude agents` already gives you for free, and it rots the
-moment it's not perfectly maintained. If your project spans multiple machines/environments
-(a laptop, a workstation, a cloud sandbox), `claude agents` only sees the current one —
-coordination between environments happens through git, not through a live process list.
+At start: name the session (on Claude Code, `claude -n <session-name>` or `/rename`; on
+another platform, whatever it offers) and, if your tool can list its own live sessions, check
+that one with your name isn't already `busy` in this `cwd` — on Claude Code that is
+`claude agents --json`. If it is, don't start; tell the owner.
+
+There are no locks, timeouts, or heartbeat files in this project. A process registry rots the
+moment it isn't perfectly maintained, and it duplicates what a tool's own session list already
+gives you for free. But note what that list is and isn't: it sees only **that tool's** sessions
+on **this machine**. Across machines, environments, or platforms — a laptop, a workstation, a
+cloud sandbox, a Gemini session — it sees nothing. There, and in any dispute, **git is the
+arbiter**: recent commits, active branches, and the worktrees under `.worktrees/`.
+
+The same applies to a tool's built-in teammates or subagents. Their shared task list lives
+outside this repository and is discarded when the session ends, so it answers "what is my team
+doing right now", never "what did this project decide". Anything that must outlive the session
+belongs in `HANDOFFS.md`, `QUESTIONS.md` or `ACTIVITY.md`.
 
 ## 2. Zones — by layer, not by directory
 
@@ -63,6 +72,16 @@ handoff.
 The shared working directory on `main` is for live shared state. A `git worktree` + branch is
 worth it for a role that edits shared/core code heavily, or that wants isolation from everyone
 else's in-flight changes: `git worktree add ../<repo>-<ID> session/<ID>`. The orchestrator merges.
+
+This is not a local invention — running one agent session per worktree is the standard
+isolation model, and Claude Code documents it directly (`/docs/en/worktrees`) as the way to run
+several sessions in parallel without automated team coordination. Nothing here needs a wrapper
+script; the one-line command above is the whole mechanism.
+
+One gotcha worth knowing because this scaffold's own tooling hit it: inside a worktree, `.git`
+is a **file**, not a directory. Any check that tests `isdir(".git")` to find the project root
+walks straight past the worktree root — which is why `check-context-budget.py` and
+`check-path-ownership.py` both test `exists()` instead.
 
 ## 6. Working protocol
 
@@ -126,5 +145,5 @@ Proposals about the coordination paradigm itself → `ACTIVITY.md` tagged `[prop
 orchestrator consolidates.
 
 **A standing orchestrator duty:** watch for cancelled mechanisms growing back. A new rule that
-answers "who's working right now" is redundant by construction — `claude agents` already answers
-that.
+answers "who's working right now" is redundant by construction — git answers it, and on a
+single machine the tool's own session list answers it sooner.

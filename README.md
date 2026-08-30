@@ -6,9 +6,18 @@ continuing role/zone — share one repository over an extended period.
 
 The scaffold is platform-agnostic: a role is held by whatever session reads its file and makes
 commits, so Claude Code, Gemini via Antigravity, Cursor or Aider can each hold one. See
-[`docs/ru/CROSS_PLATFORM_BRIDGE.md`](docs/ru/CROSS_PLATFORM_BRIDGE.md). Two conveniences named
-in the templates (`claude -n <name>` and `claude agents --json`) are Claude Code features; on
-any other platform, skip them — git is the arbiter that works everywhere.
+[`docs/ru/CROSS_PLATFORM_BRIDGE.md`](docs/ru/CROSS_PLATFORM_BRIDGE.md).
+
+That is enforced by the file layout rather than left to good intentions: the project's rules
+live in **`AGENTS.md`**, the cross-vendor convention governed since December 2025 by the Linux
+Foundation's [Agentic AI Foundation](https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation),
+and `CLAUDE.md` is a four-line adapter that imports it and adds the Claude Code specifics
+(`claude -n <name>`, `claude agents --json`, `.claude/rules/` globs). Claude Code reads
+`CLAUDE.md` and not `AGENTS.md`, which is exactly why the adapter exists.
+
+It does not compete with a tool's own multi-agent features. Claude Code's agent teams keep
+their shared task list in `~/.claude/`, scoped to one session and deleted when it ends; this
+scaffold is the durable half — in git, on every machine, readable by any tool.
 
 It's not a framework or a running service: there's no server, no live process registry, no
 database. It's a set of markdown templates and two small stdlib-only Python scripts, distilled
