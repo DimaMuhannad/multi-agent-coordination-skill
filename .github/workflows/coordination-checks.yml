@@ -88,6 +88,14 @@ jobs:
                 if total else "All cold-start files are within budget.")
           PY
 
+  # NOTE: the shipped template (assets/dot-github/workflows/coordination-checks.yml.template)
+  # has one job this file deliberately does NOT: `blocking-questions`. That check fails while an
+  # open question is marked `blocking`, which is meaningful in a project USING the scaffold. Here,
+  # assets/coordination/QUESTIONS.md is a template full of example rows, so the job would be
+  # checking documentation rather than a live journal. The equivalent guarantee for this repo is
+  # test_the_shipped_questions_template_has_no_open_blocker, which runs in protocol-tests below.
+  # This asymmetry is intentional; please don't "fix" it by copying the job across.
+
   protocol-tests:
     name: Protocol tests (no dependencies)
     runs-on: ubuntu-latest
