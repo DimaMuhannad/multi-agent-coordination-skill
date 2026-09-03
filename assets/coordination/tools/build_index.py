@@ -103,6 +103,14 @@ def parse_questions(path, diagnostics=None):
                     f"({'|'.join(schema.QUESTION_STATUSES)})",
                     raw_status,
                 )
+            raw_type = schema.strip_decoration(cell("type"))
+            kind = schema.classify_question_type(raw_type)
+            if raw_type and kind is None:
+                diag.record(
+                    diagnostics, diag.UNKNOWN_TYPE, path, row_index + 1,
+                    "type is outside the documented vocabulary (blocking|non-blocking)",
+                    raw_type,
+                )
             rows.append({
                 "id": rid,
                 "line": row_index + 1,
@@ -110,6 +118,8 @@ def parse_questions(path, diagnostics=None):
                 "status": raw_status,
                 "state": state,
                 "who": cell("role"),
+                "type": kind,
+                "raw_type": raw_type,
             })
     return rows
 
@@ -198,6 +208,7 @@ def build_index_text(coord_dir=None, diagnostics=None):
     h_rows = parse_handoffs(os.path.join(coord_dir, "HANDOFFS.md"), diagnostics)
 
     q_open = [r for r in q_rows if r["state"] == "open"]
+    q_blocking = [r for r in q_open if r["type"] == "blocking"]
     q_closed = [r for r in q_rows if r["state"] == "closed"]
     q_unknown = [r for r in q_rows if r["state"] is None]
     h_live = [r for r in h_rows if not r["is_template"]]
@@ -212,6 +223,22 @@ def build_index_text(coord_dir=None, diagnostics=None):
         "NOT duplicated here, only number/status/line to jump to. Rebuild after editing the "
         "journals: `python coordination/tools/build_index.py --out coordination/INDEX.md`.\n"
     )
+    # Blocking questions go FIRST, above everything, and say who is waiting on whom.
+    # `PROJECT.md` tells a role that a blocking question means "stop, make no changes,
+    # wait" -- so an unanswered one is not an item on a list, it is a halted session. Until
+    # this section existed, that state was indistinguishable from ordinary progress: the row
+    # sat in a markdown table nobody had a reason to open, and the type column was not even
+    # parsed.
+    if q_blocking:
+        out.append(
+            f"## {WARNING_SIGN} BLOCKING {EM_DASH} {len(q_blocking)} question(s) waiting on the owner\n"
+            "\nA role is stopped on each of these and will make no further changes to that "
+            "step until it is answered (`PROJECT.md`, question protocol). Answer in "
+            "`QUESTIONS.md` and set the status to `resolved`.\n"
+        )
+        out.append(render_table(q_blocking, "id", "who", "To"))
+        out.append("")
+
     out.append(f"## QUESTIONS.md {EM_DASH} open ({len(q_open)} of {len(q_rows)})\n")
     out.append(render_table(q_open, "id", "who", "To"))
     out.append(f"\n## HANDOFFS.md {EM_DASH} open or missing status ({len(h_open)} of {len(h_live)})\n")
@@ -239,7 +266,7 @@ def build_index_text(coord_dir=None, diagnostics=None):
     out.append(render_table(h_closed, "date"))
     out.append("\n</details>\n")
 
-    return "\n".join(out), len(q_rows), len(h_rows)
+    return "\n".join(out), len(q_rows), len(h_rows), len(q_blocking)
 
 
 def main():
@@ -254,14 +281,29 @@ def main():
         "--strict", action="store_true",
         help="exit 2 if anything could not be interpreted (default: warn on stderr, exit 0)",
     )
+    ap.add_argument(
+        "--fail-on-blocking", action="store_true",
+        help="exit 1 while any open question is marked blocking; for a CI check that turns "
+             "a halted session into something the owner cannot miss",
+    )
     args = ap.parse_args()
 
     diagnostics = []
-    text, q_count, h_count = build_index_text(args.coordination_dir or COORD, diagnostics)
+    text, q_count, h_count, blocking = build_index_text(
+        args.coordination_dir or COORD, diagnostics)
 
     with open(args.out, "w", encoding="utf-8") as fh:
         fh.write(text)
     print(f"written: {args.out} ({q_count} questions, {h_count} handoffs)")
+
+    if blocking:
+        # stderr, and named: this is the one line in the output that means a human is
+        # required. On a terminal it stands out; in CI it becomes the failure message.
+        print(
+            f"BLOCKING: {blocking} open question(s) are waiting on the owner. "
+            "A role is stopped on each of them.",
+            file=sys.stderr,
+        )
 
     for d in diagnostics:
         print(f"WARN {d}", file=sys.stderr)
@@ -273,6 +315,8 @@ def main():
         )
         if args.strict:
             return 2
+    if args.fail_on_blocking and blocking:
+        return 1
     return 0
 
 

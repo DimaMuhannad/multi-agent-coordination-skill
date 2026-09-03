@@ -84,6 +84,32 @@ jobs:
                 if total else "All cold-start files are within budget.")
           PY
 
+  blocking-questions:
+    name: Blocking questions (waiting on the owner)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Fail while a role is stopped on an unanswered blocking question
+        run: |
+          # This check is RED on purpose while a blocking question is open, and it is the
+          # only check here that is about people rather than code.
+          #
+          # PROJECT.md's question protocol says a `blocking` question means the role stops
+          # and makes no changes until it is answered. Without this, that state is a row in
+          # a markdown table nobody has a reason to open -- indistinguishable from progress.
+          # A red check on the PR is the cheapest notification that needs no service, no
+          # webhook, and no state outside git.
+          #
+          # Non-blocking questions do NOT fail: they have a documented default and the role
+          # kept working, so failing on them would train everyone to ignore this check.
+          python coordination/tools/build_index.py \
+            --out "$RUNNER_TEMP/INDEX.md" --fail-on-blocking
+
   protocol-tests:
     name: Protocol tests (no dependencies)
     runs-on: ubuntu-latest
