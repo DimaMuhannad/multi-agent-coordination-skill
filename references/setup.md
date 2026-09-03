@@ -276,7 +276,34 @@ Only do this once `references/git-github-rails.md` §"when this earns its place"
    tab) — don't assume it's wired up correctly from the YAML alone; the real verification is
    watching it run once, the same way the local hook was verified with synthetic stdin in §2.
 
-3. **Branch protection (needs repo admin rights).** In the GitHub UI: Settings → Branches → Add
+3. **Blocking-question check.** The workflow template ships a `blocking-questions` job that
+   goes **red while any open question is marked `blocking`**. This is the notification
+   mechanism, and it is worth understanding why it takes this shape.
+
+   `PROJECT.md`'s question protocol says a `blocking` question means the role stops and makes
+   no changes until it is answered. So an unanswered one is not a to-do item — it is a halted
+   session, and the owner is the only person who can restart it. Until this check existed that
+   state lived in a markdown table nobody had a reason to open, and looked identical to
+   ordinary progress. (The `Type` column was not even parsed.)
+
+   A red check needs no service, no webhook, and no state outside git — it satisfies
+   `CONCEPT.md §6.5` exactly, and it works on any platform because it is GitHub doing the
+   noticing, not an agent.
+
+   Non-blocking questions deliberately do **not** fail the check: they have a documented
+   default and the role kept working. Failing on those would train everyone to ignore the one
+   signal that means "a person is required".
+
+   Locally, the same thing:
+
+   ```bash
+   python3 coordination/tools/build_index.py --out coordination/INDEX.md --fail-on-blocking
+   ```
+
+   Open blockers are also listed in a section at the very top of `INDEX.md` — above every other
+   table, because a section below three tables is a section nobody scrolls to.
+
+4. **Branch protection (needs repo admin rights).** In the GitHub UI: Settings → Branches → Add
    branch protection rule → target the default branch → enable "Require status checks to pass"
    and select the `checks` job from `coordination-checks.yml` → optionally also enable "Require
    review from Code Owners" (only meaningful once CODEOWNERS lists more than one real account —

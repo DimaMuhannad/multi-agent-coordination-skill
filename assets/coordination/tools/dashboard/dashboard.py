@@ -97,7 +97,7 @@ def rebuild_index_file(coord_dir: Path) -> Path:
     sets of counts, depending on which tool last wrote it.
     """
     index_file = coord_dir / "INDEX.md"
-    text, _q_count, _h_count = build_index.build_index_text(str(coord_dir))
+    text, _q_count, _h_count, _blocking = build_index.build_index_text(str(coord_dir))
     with open(index_file, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(text)
     return index_file

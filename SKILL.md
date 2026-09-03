@@ -51,7 +51,8 @@ instead of an empty table.
 
 **Then ask what evidence cannot settle.** Don't guess these — they shape every template:
 
-- **Project name and what it does** (a sentence or two — goes at the top of `CLAUDE.md`).
+- **Project name and what it does** (a sentence or two — goes at the top of `AGENTS.md`, not
+  `CLAUDE.md`: the substance lives in the vendor-neutral file, see §2).
 - **Documentation/commit language** — the source project used Russian throughout; yours might be
   English or something else. Every template here is written in English as the *scaffold*
   language, but the user's project content (zone descriptions, role names, actual entries) should
@@ -66,6 +67,20 @@ instead of an empty table.
 - **Does work span multiple machines/environments** (a workstation, a laptop, an ephemeral cloud
   sandbox)? If so, `PROJECT.md`'s multi-environment section is worth filling in carefully — that's
   exactly where "which mechanism sees what" assumptions go wrong.
+- **How hard should zone ownership be enforced?** Three levels, and this is a real choice now
+  that the mechanism exists — don't pick it for them:
+  - *documented* — `OWNERSHIP.md` alone. Right for a solo project or two roles that trust each
+    other. Costs nothing, enforces nothing.
+  - *reviewed* — plus a generated `.github/CODEOWNERS` (`references/setup.md §6`). Routes review
+    on a PR. Only a real gate with more than one account and branch protection on.
+  - *blocked* — plus the `PreToolUse` hook (`§9`), which refuses a cross-zone write as it
+    happens. Needs `COORDINATION_ROLE=<ID>` set per session, and does not inspect `Bash`.
+  Default to *documented* for a small project and say why; the other two earn their place when
+  two sessions have actually collided.
+- **Do you want to be notified when a session stops on a blocking question?** If yes, and the
+  project uses GitHub, the `blocking-questions` CI job (`references/setup.md §6`) turns a halted
+  session into a red check. Without it, a blocking question is a row in a file nobody has a
+  reason to open.
 - **What are the actual hard guardrails** — read-only paths, a push-only-with-permission rule,
   domain-specific quality bars. These go in `CLAUDE.md`'s guardrails section; don't invent generic
   ones, ask what actually matters for this project.
