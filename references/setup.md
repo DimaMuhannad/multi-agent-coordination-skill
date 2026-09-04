@@ -38,6 +38,12 @@ Two findings change what you do rather than what you ask:
   make the scaffold unwelcome, and nobody notices until their rules stop applying.
 - **An existing `CODEOWNERS` is already a zone map.** Seed `OWNERSHIP.md` from it rather
   than from an empty table, then keep the two in step with §6's generator.
+- **An existing `coordination/OWNERSHIP.md` or `coordination/CHARTER.md` is read in full
+  before either is touched, never assumed missing from a directory listing that happens not
+  to show it.** `discover.py`'s `existing_coordination_files` reports both explicitly for
+  this reason. On a mature project either file is likely to already be accurate and
+  load-bearing — the "fill from discovery" instruction below is for the case where the file
+  is absent or stale, not a license to regenerate one that already exists and is neither.
 
 ## 1. Directory layout to create
 
