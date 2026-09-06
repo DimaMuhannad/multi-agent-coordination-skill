@@ -145,6 +145,15 @@ echo '{"source":"startup"}' | python .claude/hooks/check-context-budget.py
 You should see a `systemMessage` JSON line naming the oversized file. Delete the test file
 afterward.
 
+The same glob + `limit_bytes` mechanism isn't limited to markdown — a rule's `glob` is matched
+against any path under the project root. A project whose roles capture screenshots or other
+binary evidence into the coordination tree (Playwright output, annotated photos) can add a rule
+like `{"glob": "coordination/**/*.{png,jpg,wav}", "limit_bytes": 512000}` to `budget.json` to get
+a warning the next time one lands there, without writing a second tool. This only fires at
+`SessionStart`, so treat it as a periodic hygiene signal, not a commit gate — pair it with a
+pre-commit hook or CI step if the project needs binaries kept out of git entirely (object storage
+or Git LFS is the usual answer for heavy media; see `CHARTER.md §4`).
+
 ## 3. `.claude/rules/*.md` with `paths:` — when to reach for this
 
 This is a real, current Claude Code mechanism, distinct from both `CLAUDE.md` (always loaded) and
