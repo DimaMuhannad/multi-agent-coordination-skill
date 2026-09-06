@@ -104,7 +104,14 @@ jobs:
         # Both ends of the supported range, so the stdlib-only claim stays honest.
         python-version: ['3.9', '3.12']
     steps:
+      # fetch-depth: 0 -- test_discovery_of_this_repository runs discover.py's own
+      # ownership_map() against this checkout. A shallow (default depth-1) clone is exactly
+      # the case ownership_map() now detects and skips (see coordlib change history): correct
+      # behavior for a real target project, but it makes the self-check assert against an
+      # empty ownership map instead of this repo's real history.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -119,7 +126,11 @@ jobs:
     name: Dashboard tests (optional add-on)
     runs-on: ubuntu-latest
     steps:
+      # See the protocol-tests job above: this repo's own discovery self-check needs real
+      # history, not a shallow default clone.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
