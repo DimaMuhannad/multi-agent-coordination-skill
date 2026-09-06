@@ -66,11 +66,20 @@ def _git(root, *args, timeout=30):
 
     A target project may not be a git repository at all, may have no commits, or may not
     have git installed. All three are ordinary and none is this tool's business to fail on.
+
+    `encoding="utf-8", errors="replace"` is explicit rather than relying on `text=True`'s
+    default, which follows the ambient console codepage. On Windows against a repository with
+    non-ASCII commit messages (Cyrillic, say) that default can be `cp1251`, and a message it
+    can't decode raised inside the subprocess reader -- recovered from by the caller, so the
+    tool still printed a report, but a degraded one (`documentation_language`'s commit-based
+    signal silently went missing). Forcing UTF-8 with replacement means a genuinely malformed
+    byte becomes a `�` in one field rather than losing the whole probe.
     """
     try:
         result = subprocess.run(
             ["git", "-C", str(root), *args],
-            capture_output=True, text=True, check=True, timeout=timeout,
+            capture_output=True, encoding="utf-8", errors="replace", check=True,
+            timeout=timeout,
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
             FileNotFoundError, OSError):
@@ -96,7 +105,27 @@ def top_level_entries(root):
     return entries
 
 
-def ownership_map(root, max_commits=2000):
+def _clone_is_shallow_or_partial(root):
+    """True when this checkout's history is incomplete: a shallow clone, or a partial one.
+
+    `--numstat` needs the full blob content of every changed file in every commit it walks.
+    A shallow clone (`--depth`) is missing commits outright. A partial clone
+    (`--filter=blob:none`, the shape `git clone --filter=blob:none` and similar bootstrap
+    commands produce) has every commit but must lazily fetch each blob's content over the
+    network on first use -- against a slow connection, `git log --numstat -n 2000` on exactly
+    such a clone has been measured taking 20+ minutes, not the 30 seconds `ownership_map`
+    otherwise allows before giving up.
+    """
+    if (_git(root, "rev-parse", "--is-shallow-repository", timeout=10) or "").strip() == "true":
+        return True
+    promisor = (_git(root, "config", "--get", "remote.origin.promisor", timeout=10) or "").strip()
+    if promisor == "true":
+        return True
+    filt = (_git(root, "config", "--get", "remote.origin.partialclonefilter", timeout=10) or "").strip()
+    return bool(filt)
+
+
+def ownership_map(root, max_commits=2000, timeout=30):
     """Who actually edits each top-level directory, from git history.
 
     This is the empirical ownership map, and it is usually more honest than the declared
@@ -107,11 +136,33 @@ def ownership_map(root, max_commits=2000):
     Churn is measured in lines added+removed. It is a blunt instrument -- a reformatting
     commit outweighs a subtle fix -- so the output names it `lines` rather than anything
     implying significance, and the interview treats it as a candidate, not a verdict.
+
+    Returns `(zones, warning)`. `warning` is None on an ordinary run (whether or not any
+    history was found -- an empty repo is not a warning) and a short string on the two ways
+    this specific probe can silently degrade: a shallow/partial clone detected up front, or an
+    actual timeout despite that check. Both used to collapse into `zones == []`, which reads
+    identically to "this repo genuinely has no history" -- the failure mode this return shape
+    exists to stop being silent.
     """
-    out = _git(root, "log", "--no-merges", "--format=%n%an", "--numstat",
-               "-n", str(max_commits))
+    if _clone_is_shallow_or_partial(root):
+        return [], ("skipped: this checkout is a shallow or partial clone; `--numstat` would "
+                     "need to fetch blob content over the network per changed file and has "
+                     "been measured taking 20+ minutes on a slow connection")
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "log", "--no-merges", "--format=%n%an", "--numstat",
+             "-n", str(max_commits)],
+            capture_output=True, encoding="utf-8", errors="replace", check=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return [], "timed out after %ds (not detected as shallow/partial up front)" % timeout
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return [], None
+    out = result.stdout
     if not out:
-        return []
+        return [], None
 
     author = None
     churn = defaultdict(Counter)
@@ -150,7 +201,7 @@ def ownership_map(root, max_commits=2000):
             "authors": len(authors),
         })
     zones.sort(key=lambda z: -z["lines"])
-    return zones
+    return zones, None
 
 
 def existing_codeowners(root):
@@ -197,6 +248,32 @@ def existing_instructions(root):
         if path.is_dir():
             count = len(list(path.rglob("*.md")))
             found.append({"path": relative, "kind": "directory", "rule_files": count})
+    return found
+
+
+#: The two files `SKILL.md` singles out as "archaeological, not aspirational" on an existing
+#: project. `existing_instructions` already reports generic agent-instruction files so the
+#: installer imports rather than overwrites them; these two are this scaffold's own equivalent
+#: and need the same explicit "already exists" signal, not a fold-in of the generic list --
+#: silently missing it has already contributed to a real near-miss (a fresh OWNERSHIP.md
+#: almost overwriting one with real, current content, caught only by `git status` before commit).
+COORDINATION_FILES = (
+    "coordination/OWNERSHIP.md",
+    "coordination/CHARTER.md",
+)
+
+
+def existing_coordination_files(root):
+    """OWNERSHIP.md and CHARTER.md already present, to read before writing, not assume blank."""
+    found = []
+    for relative in COORDINATION_FILES:
+        path = Path(root) / relative
+        if path.is_file():
+            try:
+                lines = sum(1 for _ in open(path, "r", encoding="utf-8", errors="replace"))
+            except OSError:
+                lines = None
+            found.append({"path": relative, "lines": lines})
     return found
 
 
@@ -369,13 +446,16 @@ def discover(root):
     """Everything this tool can establish without asking or writing."""
     root = Path(root)
     git = is_git_repo(root)
+    zones, ownership_warning = ownership_map(root) if git else ([], None)
     return {
         "root": str(root),
         "is_git_repo": git,
         "top_level_directories": top_level_entries(root),
-        "ownership_map": ownership_map(root) if git else [],
+        "ownership_map": zones,
+        "ownership_map_warning": ownership_warning,
         "existing_codeowners": existing_codeowners(root),
         "existing_instructions": existing_instructions(root),
+        "existing_coordination_files": existing_coordination_files(root),
         "verification_commands": verification_commands(root),
         "documentation_language": documentation_language(root),
         "scaffold": scaffold_state(root),
@@ -406,6 +486,7 @@ def render(report):
     lines.append("")
 
     zones = report["ownership_map"]
+    warning = report.get("ownership_map_warning")
     if zones:
         lines.append("Who actually edits what (git history, lines added+removed):")
         for zone in zones[:12]:
@@ -413,9 +494,20 @@ def render(report):
                 zone["path"], zone["lines"], zone["top_author"],
                 zone["dominance_pct"], zone["authors"],
                 "" if zone["authors"] == 1 else "s"))
+    elif warning:
+        lines.append("Who actually edits what: NOT DETERMINED - %s" % warning)
     elif report["is_git_repo"]:
         lines.append("Who actually edits what: no commit history to read")
     lines.append("")
+
+    coord_files = report["existing_coordination_files"]
+    if coord_files:
+        lines.append("Existing coordination files - READ before writing, archaeological not "
+                     "aspirational:")
+        for item in coord_files:
+            detail = ("%s lines" % item["lines"]) if item["lines"] is not None else "unreadable"
+            lines.append("  %-34s %s" % (item["path"], detail))
+        lines.append("")
 
     codeowners = report["existing_codeowners"]
     if codeowners:

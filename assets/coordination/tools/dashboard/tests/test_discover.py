@@ -83,6 +83,8 @@ def test_repository_with_no_commits_does_not_raise(tmp_path):
     report = discover_cli.discover(root)
     assert report["is_git_repo"] is True
     assert report["ownership_map"] == []
+    assert report["ownership_map_warning"] is None, \
+        "an empty repo is not a warning -- it genuinely has no history"
 
 
 def test_worktree_is_handled(repo, tmp_path):
@@ -115,6 +117,62 @@ def test_ownership_map_survives_a_binary_file(repo):
     _git(repo, "commit", "-qm", "add binary")
     report = discover_cli.discover(repo)
     assert report["ownership_map"], "history became unreadable when a binary file appeared"
+
+
+# ---------------------------------------------------------------------------------------
+# ownership_map's timeout, previously indistinguishable from "no history"
+# ---------------------------------------------------------------------------------------
+
+def test_shallow_clone_is_detected_and_skipped_with_a_warning(repo, tmp_path):
+    """A shallow clone is missing commits outright -- `--numstat` over it is misleading, not
+    just slow, so this must be caught before the log walk, not after it times out."""
+    shallow = tmp_path / "shallow"
+    # --no-local: a same-filesystem clone otherwise takes a hardlink shortcut that ignores
+    # --depth entirely, so the clone below would come out non-shallow and the test would be
+    # asserting nothing.
+    subprocess.run(["git", "clone", "--no-local", "--depth", "1", str(repo), str(shallow)],
+                    capture_output=True, text=True, check=True)
+    assert (_git(shallow, "rev-parse", "--is-shallow-repository").stdout.strip() == "true")
+
+    zones, warning = discover_cli.ownership_map(shallow)
+    assert zones == []
+    assert warning is not None and "shallow" in warning
+
+
+def test_partial_clone_markers_are_detected_even_though_history_is_complete(repo, tmp_path):
+    """A `--filter=blob:none` clone has every commit, unlike a shallow one -- only the blob
+    content is missing, fetched lazily on demand. Setting up a real filtered clone needs a
+    remote that speaks protocol v2; the config it leaves behind is simulated directly instead,
+    since that config is exactly what detection reads."""
+    clone = tmp_path / "partial"
+    subprocess.run(["git", "clone", str(repo), str(clone)],
+                    capture_output=True, text=True, check=True)
+    _git(clone, "config", "remote.origin.promisor", "true")
+    _git(clone, "config", "remote.origin.partialclonefilter", "blob:none")
+
+    zones, warning = discover_cli.ownership_map(clone)
+    assert zones == []
+    assert warning is not None and "partial" in warning
+
+
+def test_a_genuine_timeout_is_distinguished_from_no_history(repo, monkeypatch):
+    """Not every slow `git log` is a detectable shallow/partial clone -- a huge full clone on
+    a slow disk can still time out. That case must not collapse back into `zones == []` with
+    no explanation either."""
+    def _raise_timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="git log", timeout=kwargs.get("timeout", 30))
+
+    monkeypatch.setattr(discover_cli.subprocess, "run", _raise_timeout)
+    zones, warning = discover_cli.ownership_map(repo)
+    assert zones == []
+    assert warning is not None and "timed out" in warning
+
+
+def test_an_ordinary_repository_still_reports_cleanly_with_no_warning(repo):
+    """The true case must still fire: a normal repo produces zones and no warning at all."""
+    zones, warning = discover_cli.ownership_map(repo)
+    assert zones
+    assert warning is None
 
 
 # ---------------------------------------------------------------------------------------
@@ -151,6 +209,45 @@ def test_language_is_undetermined_without_any_text(tmp_path):
 
 
 # ---------------------------------------------------------------------------------------
+# _git's decoding: previously followed the ambient console codepage
+# ---------------------------------------------------------------------------------------
+
+def test_git_helper_forces_utf8_decoding_explicitly(repo, monkeypatch):
+    """On Windows the default console codepage for non-English locales is not UTF-8 (e.g.
+    `cp1251`), and `text=True` without an explicit encoding follows it -- a Cyrillic commit
+    message could then raise inside the subprocess reader. Assert the fix directly: the
+    encoding is forced rather than left to the environment."""
+    captured = {}
+    real_run = subprocess.run
+
+    def _spy(cmd, **kwargs):
+        captured.update(kwargs)
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(discover_cli.subprocess, "run", _spy)
+    discover_cli._git(repo, "rev-parse", "--git-dir")
+    assert captured.get("encoding") == "utf-8"
+    assert captured.get("errors") == "replace"
+
+
+def test_cyrillic_commit_subjects_are_read_and_detected(tmp_path):
+    """The true case this fix must keep working: Cyrillic commit subjects are read at all,
+    and contribute to the language guess -- not just "doesn't crash"."""
+    root = tmp_path / "ru"
+    root.mkdir()
+    _git(root, "init", "-q")
+    _git(root, "config", "user.email", "a@example.com")
+    _git(root, "config", "user.name", "Alice")
+    _write(root / "a.py", "x = 1\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-qm", "Добавить модуль обработки данных на русском языке")
+
+    language = discover_cli.documentation_language(root)
+    assert language["sources"]["commits"] is True
+    assert language["guess"] == "russian"
+
+
+# ---------------------------------------------------------------------------------------
 # The other probes
 # ---------------------------------------------------------------------------------------
 
@@ -162,6 +259,23 @@ def test_existing_instruction_files_are_reported_for_import(tmp_path):
     _write(root / ".cursor" / "rules" / "api.md", "---\npaths: []\n---\n")
     found = {item["path"] for item in discover_cli.existing_instructions(root)}
     assert {"AGENTS.md", ".cursorrules", ".cursor/rules"} <= found
+
+
+def test_existing_ownership_and_charter_are_reported_for_reading_not_overwriting(tmp_path):
+    """The two files `SKILL.md` calls archaeological on an existing project. Missing this
+    check has already contributed to a real near-miss: a fresh OWNERSHIP.md almost overwrote
+    one with real content, caught only by `git status` right before commit."""
+    root = tmp_path / "p"
+    _write(root / "coordination" / "OWNERSHIP.md", "# Ownership\n\nline two\n")
+    _write(root / "coordination" / "CHARTER.md", "# Charter\n")
+    found = {item["path"]: item["lines"] for item in discover_cli.existing_coordination_files(root)}
+    assert found == {"coordination/OWNERSHIP.md": 3, "coordination/CHARTER.md": 1}
+
+
+def test_absent_coordination_files_report_nothing(tmp_path):
+    root = tmp_path / "p"
+    root.mkdir()
+    assert discover_cli.existing_coordination_files(root) == []
 
 
 def test_existing_codeowners_is_parsed(tmp_path):
@@ -210,6 +324,8 @@ def test_cli_json_is_valid_and_exit_is_zero(repo, capsys):
     assert discover_cli.main(["--root", str(repo), "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["is_git_repo"] is True
+    assert "ownership_map_warning" in payload
+    assert "existing_coordination_files" in payload
 
 
 def test_cli_human_output_names_what_it_could_not_answer(repo, capsys):
@@ -234,9 +350,12 @@ def test_discovery_of_this_repository(capsys):
     assert report["is_git_repo"] is True
     paths = {zone["path"] for zone in report["ownership_map"]}
     assert {"assets", "references"} <= paths
+    assert report["ownership_map_warning"] is None
     assert "pytest" in report["verification_commands"]
     # English despite docs/ru/ and the Russian link in the README.
     assert report["documentation_language"]["guess"] == "english"
+    # This is the skill's own template tree: no installed OWNERSHIP.md/CHARTER.md at the root.
+    assert report["existing_coordination_files"] == []
 
 
 def test_the_new_tools_are_covered_by_the_dependency_guard():
