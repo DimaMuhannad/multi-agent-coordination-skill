@@ -258,7 +258,7 @@ def russian_schema_files(tmp_path: Path) -> Dict[str, Path]:
     """Russian PROTOCOL tokens: translated headers and translated status/type values.
 
     This is the shape the tools must reject with an explicit diagnostic rather than parse
-    into believable-looking numbers. references/rationale.md records what happened when the
+    into believable-looking numbers. The skill's references/rationale.md records what happened when the
     source project let `Статус:` drift in alongside `Status:`.
     """
     coord = tmp_path / "ru_schema"

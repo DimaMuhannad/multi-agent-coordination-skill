@@ -19,7 +19,7 @@ in the parsers and the third KPI partition in the dashboard.
 
 ON LANGUAGE: the status and type keywords are protocol tokens, not prose. Write questions,
 answers, summaries and handoff bodies in whatever language the project uses; these keywords
-and the table headers stay English, because tooling parses them. references/rationale.md
+and the table headers stay English, because tooling parses them. The skill's references/rationale.md
 records what happened to the source project when that was left implicit. The tools do not
 guess at a translation -- they report `unknown-status` and let a human fix the file.
 """

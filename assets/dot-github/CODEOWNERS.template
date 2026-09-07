@@ -27,7 +27,7 @@ coordination/**                @<ORCH_GITHUB_USER>
 # ── Read before you rely on this file ──────────────────────────────────────────────────────
 #
 # CODEOWNERS only becomes an actual review GATE (not just a hint) once branch protection has
-# "Require review from Code Owners" turned on for the target branch — see references/setup.md
+# "Require review from Code Owners" turned on for the target branch — see the skill's references/setup.md
 # §6 for where to click. Without that setting this file just pre-fills the reviewer list on a
 # PR; nothing stops a merge without their approval.
 #
@@ -35,4 +35,4 @@ coordination/**                @<ORCH_GITHUB_USER>
 # write access to the repo. In a single-maintainer repo, listing yourself as every zone's owner
 # is honest documentation of intent (this is who's responsible for this path) but is not a real
 # multi-person gate — you can always approve your own PR. Don't present it as enforcement it
-# isn't; see references/git-github-rails.md for the fuller version of this caveat.
+# isn't; see the skill's references/git-github-rails.md for the fuller version of this caveat.

@@ -13,10 +13,10 @@ unanswered questions is only half useful; the point is a durable decision record
 
 `blocking` is not a severity label — it is a claim that a session has **stopped**. Mark it only
 when that is true, and expect it to be visible: open blockers head `INDEX.md`, and the optional
-`blocking-questions` CI check is red until they are answered (`references/setup.md §6`). Marking
+`blocking-questions` CI check is red until they are answered (the skill's `references/setup.md §6`). Marking
 a question blocking when a default existed is how that signal stops being believed.
 Both are protocol tokens parsed by tooling and stay English even in a project written in another
-language; the question and answer text is prose and does not (`references/rationale.md`). A word
+language; the question and answer text is prose and does not (the skill's `references/rationale.md`). A word
 outside these lists is reported as unrecognised and counted in neither total — the tools will not
 guess at a translation.
 

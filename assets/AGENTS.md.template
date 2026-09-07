@@ -48,7 +48,7 @@ Fill this section in with your project's actual hard constraints. Typical shape:
 - **Work only in your own zone.** A request outside it doesn't get done — explain whose zone it
   is, log it in `coordination/HANDOFFS.md`, offer to switch. Not sure whose zone — ask.
   `coordination/OWNERSHIP.md` is the map, and it can be enforced rather than merely believed:
-  see `references/setup.md` for the ownership hook and the generated `CODEOWNERS`.
+  see the skill's `references/setup.md` for the ownership hook and the generated `CODEOWNERS`.
 - Commit format: `[<ID>]` prefix + trailers **as the last paragraph, no blank line inside the
   block** (`CHARTER.md §4` has the exact gotcha and why it matters).
 - Any domain-specific quality bar worth stating as a hard rule (e.g. "a fit result needs residual

@@ -2,7 +2,7 @@
 diagnostics.py - the channel through which the coordination tools say "I did not understand
 this", instead of silently reporting zero.
 
-The failure this exists to prevent is documented in references/rationale.md: a parser that
+The failure this exists to prevent is documented in the skill's references/rationale.md: a parser that
 matches English status words returns is_open=False for a Russian `открыт` and the operator
 sees "Open Questions: 0" with no indication anything went wrong. Numbers that are quietly
 wrong are worse than an error, because they get believed.

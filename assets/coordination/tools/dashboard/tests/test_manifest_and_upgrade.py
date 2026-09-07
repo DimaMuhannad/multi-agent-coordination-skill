@@ -177,7 +177,7 @@ def test_stamp_records_both_baselines(project, upstream):
 
 
 def test_a_file_customised_at_install_is_not_drift(tmp_path, upstream):
-    """references/setup.md tells the installer to fill in CHARTER.md sections.
+    """The skill's references/setup.md tells the installer to fill in CHARTER.md sections.
 
     The installed file therefore differs from its source on purpose. It must read as
     unchanged until somebody edits it AFTER the install.

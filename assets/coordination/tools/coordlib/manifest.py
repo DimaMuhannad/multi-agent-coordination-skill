@@ -226,7 +226,7 @@ def build_stamp(assets_dir, project_root, *, source_commit="", source_ref="",
 
     Two hashes per entry, and the second one is not redundant -- it is what makes the whole
     report usable. Installed files are not byte-identical to their sources: the installer
-    fills `<PROJECT NAME>`, the role ids, the zone tables, and `references/setup.md` §4
+    fills `<PROJECT NAME>`, the role ids, the zone tables, and the skill's `references/setup.md` §4
     explicitly tells it to fill CHARTER.md's "shared/core code" and "conflict hot spots"
     sections. With a single source hash, every file customised during a normal install
     reports as locally modified on the very first run, forever.

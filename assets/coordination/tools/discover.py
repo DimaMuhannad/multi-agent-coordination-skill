@@ -363,7 +363,7 @@ def documentation_language(root, sample=200):
     Guessed rather than asked, and reported as a guess with its evidence, so the interview
     can show the owner *why* and be corrected in one word. It only decides which language
     prose is written in; the protocol tokens stay English regardless
-    (`references/rationale.md`), so being wrong costs a correction, not a defect.
+    (the skill's `references/rationale.md`), so being wrong costs a correction, not a defect.
 
     Commit subjects and the README are counted separately because they genuinely disagree:
     a team often writes English commits over a README in its own language, and collapsing
