@@ -20,10 +20,16 @@ their shared task list in `~/.claude/`, scoped to one session and deleted when i
 scaffold is the durable half — in git, on every machine, readable by any tool.
 
 It's not a framework or a running service: there's no server, no live process registry, no
-database. It's a set of markdown templates and two small stdlib-only Python scripts, distilled
-from a real multi-role project that ran this paradigm for weeks and fixed the specific problems
-it hit along the way. Those problems — and why the fix looks the way it does — are written up in
-[`references/rationale.md`](references/rationale.md).
+database. What lands in your project is markdown templates plus **stdlib-only Python** — six
+tools, the shared `coordlib/`, and two hooks: roughly 3,500 lines that import nothing outside the
+standard library, so adopting the scaffold adds no dependency to install or track. The optional
+Streamlit dashboard below is the single exception, and it is not installed by default.
+
+The repository itself is bigger than what it installs — about 10,700 lines under
+`coordination/tools/`, roughly half of it the test suite, which stays here rather than travelling
+into your project. All of it is distilled from a real multi-role project that ran this paradigm
+for weeks and fixed the specific problems it hit along the way. Those problems — and why the fix
+looks the way it does — are written up in [`references/rationale.md`](references/rationale.md).
 
 ## What's in it
 
