@@ -29,7 +29,8 @@ _ITALIC_ASIDE = re.compile(r"\*\([^)]*\)\*")
 
 #: The LEADING run of backticked code spans, separated only by commas or whitespace.
 #: Anything after the first prose word is commentary, and commentary contains backticks of
-#: its own: the shipped matrix writes ``(if you keep one -- see `references/rationale.md`)``
+#: its own: the shipped matrix (in the skill) writes
+#: ``(if you keep one -- see `references/rationale.md` in this skill)``
 #: and ``(rules for the directory: see the `archive/README.md` template)``. Collecting every
 #: code span in the cell turns both of those cross-references into owned zones.
 _LEADING_SPANS = re.compile(r"^(?:\s*`[^`]+`\s*(?:,|and\b)?\s*)+")

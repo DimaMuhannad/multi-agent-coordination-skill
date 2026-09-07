@@ -4,7 +4,7 @@
 The scaffold is copied into a project and the link is severed. Fixes made upstream --
 including ones for defects that corrupt files or make a journal report zero open questions
 and be believed -- never reach any project already running it. This is the delivery
-direction that `references/upstream-feedback.md` does not cover.
+direction that the skill's `references/upstream-feedback.md` does not cover.
 
 **This reports; it does not merge.** Three-way auto-merge of markdown that humans have
 edited cannot be done without lying about the result, and a wrong merge of CHARTER.md is

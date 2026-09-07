@@ -51,7 +51,7 @@ automatically the moment a session does.
 |---|---|---|
 | *(example)* `.claude/rules/pipeline-commands.md` | `src/pipeline/**` | run/test/verify commands |
 
-Three glob rules worth knowing before you write one — see `references/setup.md` for the full
+Three glob rules worth knowing before you write one — see the skill's `references/setup.md` for the full
 version, and `coordination/tools/check_rules.py` to check your files against them:
 
 - `[` starts a bracket expression. A literal one must be escaped (`photos \[2024/**`);
@@ -63,7 +63,7 @@ version, and `coordination/tools/check_rules.py` to check your files against the
 
 ## Automatic checks
 
-This scaffold ships three hooks (`references/setup.md` wires them up; the last two are opt-in):
+This scaffold ships three hooks (the skill's `references/setup.md` wires them up; the last two are opt-in):
 
 | Hook | Event | Effect |
 |---|---|---|

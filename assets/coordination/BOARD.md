@@ -13,7 +13,7 @@ sign the detail belongs in the role's own file with a pointer from here instead.
 **Status vocabulary:** `active` · `idle` · `stale` · `blocked`, written as
 `<status> (YYYY-MM-DD)`. These are protocol tokens parsed by tooling and stay English even in a
 project written in another language — the one-line summary is prose and does not
-(`references/rationale.md`). A word outside this list is reported as unrecognised and counted in
+(the skill's `references/rationale.md`). A word outside this list is reported as unrecognised and counted in
 neither the active nor the inactive total, rather than being guessed at.
 
 A role that's gone quiet for a while doesn't need its line deleted — update the date and status

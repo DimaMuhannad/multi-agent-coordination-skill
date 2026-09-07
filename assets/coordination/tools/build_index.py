@@ -13,7 +13,7 @@ This version assumes the CANONICAL format the bundled templates define — no dr
     `- **Status:** open|taken|done` (see the HANDOFFS.md template for why this is mandatory).
 
 If your project's journals drift from this format over time (they will, eventually — see
-references/rationale.md for the THz project's experience with 8 different status-phrasing
+the skill's references/rationale.md for the THz project's experience with 8 different status-phrasing
 variants), extend the regexes below rather than special-casing every historical entry; keep this
 script simple and let format drift be a signal that the templates need reinforcing, not a reason
 to make the parser permissive.

@@ -10,7 +10,7 @@ Streamlit dashboard depends on it too. The dependency runs one way only:
 
 coordlib must never import from dashboard/, and nothing outside dashboard/ may import
 streamlit. That is enforced by test_core_tools_do_not_import_dashboard_or_streamlit, not
-merely documented -- a rule nobody checks is the failure mode references/rationale.md is
+merely documented -- a rule nobody checks is the failure mode the skill's references/rationale.md is
 about.
 """
 

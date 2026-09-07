@@ -4,7 +4,7 @@ test_commit_trailers_hook.py - the PostToolUse commit-trailer hook.
 The hook is an asset copied into user projects (assets/dot-claude/hooks/), not part of the
 dashboard package, so it is exercised as a subprocess exactly as a harness invokes it.
 
-Both sides are tested throughout, per references/upstream-feedback.md §4: a check that only
+Both sides are tested throughout, per the skill's references/upstream-feedback.md §4: a check that only
 ever proves it stays quiet has moved the failure from "too noisy" to "misses real problems".
 """
 

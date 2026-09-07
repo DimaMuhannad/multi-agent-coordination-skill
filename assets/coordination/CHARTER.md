@@ -61,7 +61,7 @@ handoff.
   This one does not hold on attention, and that is measured, not assumed: 10 of 29 commits in
   one week carried a `Session:` line git did not recognise, and in a later run 1 of 7 commits
   by sessions that had just read this section had no trailer block at all. So the scaffold
-  ships the check — `.claude/hooks/check-commit-trailers.py`, wired per `references/setup.md
+  ships the check — `.claude/hooks/check-commit-trailers.py`, wired per the skill's `references/setup.md
   §9`. It asks git what git parses, after the commit, and tells you to `--amend` when the
   answer is nothing. A rule enforced by a hook stays true; a rule that only lives in this
   document rots the moment nobody's checking.
@@ -90,7 +90,7 @@ handoff.
 - **Heavy binaries don't belong in `coordination/`** — durable knowledge here is markdown and
   JSON. Screenshots, audio, and photos captured during work belong in object storage or Git LFS,
   not the coordination tree; `coordination/tools/check-context-budget.py`'s glob + `limit_bytes`
-  rules (`references/setup.md §2`) can warn when one lands there anyway.
+  rules (the skill's `references/setup.md §2`) can warn when one lands there anyway.
 
 ## 5. Isolation (git)
 

@@ -7,6 +7,7 @@ vendor-neutral instruction silently stops reaching the session, with no error an
 """
 
 import re
+import subprocess
 from pathlib import Path
 
 _ASSETS_DIR = Path(__file__).resolve().parents[4]
@@ -51,3 +52,45 @@ def test_templates_have_no_control_bytes_and_are_lf_only():
         raw = _read(path)
         assert "\r" not in raw, path.name
         assert not re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", raw), path.name
+
+
+# ---------------------------------------------------------------------------------------
+# Shipped files must not point at paths that only exist in the skill
+# ---------------------------------------------------------------------------------------
+
+_CITATION = re.compile(r"references/\w+\.md")
+
+
+def _shipped_files():
+    """Every file under assets/ that a project receives, tracked by git."""
+    listed = subprocess.run(
+        ["git", "ls-files", "assets/"], cwd=str(_ASSETS_DIR.parent),
+        capture_output=True, text=True, check=True,
+    ).stdout.split()
+    return [_ASSETS_DIR.parent / name for name in listed]
+
+
+def test_no_shipped_file_points_at_the_skills_references_as_if_local():
+    """`references/` stays in the skill; `assets/` is what lands in a project.
+
+    A shipped file citing one of those paths reads as project-relative and resolves to nothing
+    there -- except for a session that happens to have the skill installed, which is the worst
+    version: a pointer that works for some readers and silently fails for others. Naming the
+    skill on the same line is the whole fix, and this keeps it from regressing.
+
+    Matched as a real document path, so a fixture containing an escape like `\\references/y`
+    is not mistaken for a citation.
+    """
+    offenders = []
+    for path in _shipped_files():
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for number, line in enumerate(text.splitlines(), start=1):
+            if _CITATION.search(line) and "skill" not in line:
+                offenders.append(f"{path.name}:{number}: {line.strip()}")
+    assert not offenders, (
+        "shipped files cite the skill's references/ without saying so:\n  "
+        + "\n  ".join(offenders)
+    )

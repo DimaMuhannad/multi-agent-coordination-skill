@@ -32,7 +32,7 @@ command, inspects a commit that already exists, and asks git a question with a d
 answer. The costs of being wrong are different too -- a wrongly blocked write stops real work,
 a spurious message here costs one line of output.
 
-Wire it up per `references/setup.md §9` (it is opt-in, like the ownership hook):
+Wire it up per the skill's `references/setup.md §9` (it is opt-in, like the ownership hook):
 
     {"hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [
         {"type": "command", "command": "python3 .claude/hooks/check-commit-trailers.py"}]}]}}
