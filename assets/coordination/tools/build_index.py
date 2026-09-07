@@ -31,13 +31,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from coordlib import diagnostics as diag  # noqa: E402
 from coordlib import md_table, schema  # noqa: E402
-from coordlib.md_table import SEP_RE, split_table_row  # noqa: E402,F401
+from coordlib.md_table import split_table_row  # noqa: E402
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-COORD = os.path.join(ROOT, "coordination")
-if not os.path.isdir(COORD):
-    # Authoring layout: this repository keeps the scaffold under assets/.
-    COORD = os.path.join(ROOT, "assets", "coordination")
+#: Two directories up from this script, in both layouts there are: <project>/coordination
+#: in an installed project, and <skill>/assets/coordination in the repository the scaffold is
+#: authored in. A branch here used to special-case the second one by appending "assets" to a
+#: root that already ended in it, so it could only ever have produced
+#: <skill>/assets/assets/coordination -- unreachable, because the condition guarding it was
+#: never true. Anything that is neither layout says so with --coordination-dir.
+COORD = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "coordination",
+)
 
 STATUS_RE = re.compile(r"\*\*Status:?\*\*:?\s*`?([^`\n().]*)", re.IGNORECASE)
 HEADER_RE = re.compile(r"^##\s+\[([^\]]+)\]\s*(.*)$")
@@ -47,16 +52,6 @@ HEADER_RE = re.compile(r"^##\s+\[([^\]]+)\]\s*(.*)$")
 EM_DASH = "\u2014"
 ELLIPSIS = "\u2026"
 WARNING_SIGN = "\u26a0"
-
-#: Kept as a module-level name because callers and tests import it. Now one shared rule
-#: instead of this file's own substring copy, which disagreed with the dashboard's two.
-def is_open(status):
-    return schema.classify_item_status(status) == "open"
-
-
-#: Historic alias: this file's own tokenizer used line.strip("|"), which eats cells from
-#: doubled borders and ignored backtick code spans. coordlib's is the careful one.
-split_row = split_table_row
 
 
 def parse_questions(path, diagnostics=None):
@@ -302,9 +297,19 @@ def main():
     )
     args = ap.parse_args()
 
+    coord_dir = args.coordination_dir or COORD
+    if not os.path.isdir(coord_dir):
+        # Without this the run "succeeds" and writes an index reporting nothing open, which
+        # is the failure this scaffold treats as its worst: a journal believed to be empty.
+        print(
+            f"build_index: no coordination directory at {coord_dir}. "
+            "Pass --coordination-dir when the scaffold is not at <project>/coordination/.",
+            file=sys.stderr,
+        )
+        return 2
+
     diagnostics = []
-    text, q_count, h_count, blocking = build_index_text(
-        args.coordination_dir or COORD, diagnostics)
+    text, q_count, h_count, blocking = build_index_text(coord_dir, diagnostics)
 
     with open(args.out, "w", encoding="utf-8") as fh:
         fh.write(text)

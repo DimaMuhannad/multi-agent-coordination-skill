@@ -117,3 +117,20 @@ def test_strict_mode_exits_nonzero_on_a_problem(tmp_path):
     _rule(tmp_path, "bad.md", '---\npaths:\n  - "photos [2024/**"\n---\nbody\n')
     assert check_rules.main(["--rules-dir", str(tmp_path), "--strict"]) == 1
     assert check_rules.main(["--rules-dir", str(tmp_path)]) == 0
+
+
+def test_find_rules_dir_ignores_an_authoring_layout(tmp_path, monkeypatch):
+    """`assets/dot-claude/rules` is this repository's staging path, not a project layout.
+
+    The discovery walk used to accept it, so the tool's answer depended on which repository
+    you were standing in. A project that happens to vendor another scaffold under `assets/`
+    would have had its rules validated from there instead of from `.claude/rules`.
+    """
+    staged = tmp_path / "assets" / "dot-claude" / "rules"
+    staged.mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    assert check_rules.find_rules_dir() is None
+
+    real = tmp_path / ".claude" / "rules"
+    real.mkdir(parents=True)
+    assert check_rules.find_rules_dir() == real

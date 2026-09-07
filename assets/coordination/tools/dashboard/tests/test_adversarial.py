@@ -506,10 +506,10 @@ class TestAdversarialBuildIndexCompatibility(unittest.TestCase):
             self.assertEqual(len(q_rows), 3)
             self.assertEqual(len(h_rows), 2)
 
-            q_open = [r for r in q_rows if bi.is_open(r["status"])]
-            q_closed = [r for r in q_rows if not bi.is_open(r["status"])]
-            h_open = [r for r in h_rows if bi.is_open(r["status"]) or r["status"] == "missing"]
-            h_closed = [r for r in h_rows if not bi.is_open(r["status"]) and r["status"] != "missing"]
+            q_open = [r for r in q_rows if r["state"] == "open"]
+            q_closed = [r for r in q_rows if r["state"] != "open"]
+            h_open = [r for r in h_rows if r["state"] == "open" or r["status"] == "missing"]
+            h_closed = [r for r in h_rows if r["state"] != "open" and r["status"] != "missing"]
 
             self.assertEqual(len(q_open), 1)  # Only Q-3 is open
             self.assertEqual(q_open[0]["id"], "Q-3")
@@ -555,6 +555,26 @@ class TestAdversarialBuildIndexCompatibility(unittest.TestCase):
             self.assertTrue(out_file.exists())
             idx_data = parse_index(out_file)
             self.assertGreaterEqual(idx_data["questions_total_count"], 0)
+
+    def test_build_index_refuses_a_coordination_dir_that_is_not_there(self):
+        """A missing journal directory is an error, not an index reporting nothing open.
+
+        Without the guard the run "succeeds": both journals parse as absent, and the written
+        index says zero questions and zero handoffs. That is the failure this scaffold treats
+        as its worst -- a journal believed to be empty -- and it is what a typo in
+        --coordination-dir, or a scaffold not yet installed, produces.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_file = Path(tmpdir) / "INDEX.md"
+            res = subprocess.run(
+                [sys.executable, str(BUILD_INDEX_PATH),
+                 "--coordination-dir", str(Path(tmpdir) / "not-installed-here"),
+                 "--out", str(out_file)],
+                capture_output=True, text=True, encoding="utf-8",
+            )
+            self.assertEqual(res.returncode, 2, res.stdout + res.stderr)
+            self.assertIn("--coordination-dir", res.stderr)
+            self.assertFalse(out_file.exists(), "an unusable run must not write an index")
 
 
 

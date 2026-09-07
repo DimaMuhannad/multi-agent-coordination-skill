@@ -31,7 +31,7 @@ If you want the session to keep working autonomously across multiple steps rathe
 after one, wrap it with your tool's looping mechanism (e.g. Claude Code's `/loop`) instead of
 writing a separate always-keep-going prompt variant here.
 
-### Two things to keep OUT of the nudge
+### What to keep OUT of the nudge
 
 **Don't tell the session to `git clone` the project.** When the repository is already attached to
 the session — the normal case for a cloud or container session started against a repo — a clone
@@ -40,11 +40,9 @@ checkout did not already have. An explicit clone earns its place only when a fro
 checkout is the thing being tested (timing a cold provision, verifying container setup), not as a
 default "to be safe".
 
-**Do fetch before trusting `origin`.** If the session needs to know whether work is pushed, the
-answer is `git fetch origin <branch>` on the checkout it already has — cheap, and it is the only
-thing the clone was really providing. `CHARTER.md §4` has the rule and the failure it prevents:
-a stale remote-tracking ref once produced a confident "53 commits at risk of being lost", which
-is precisely the kind of belief that provokes a force-push against a problem that never existed.
+If the session needs to know whether work is pushed, `git fetch origin <branch>` on the checkout
+it already has answers that — and it was the only thing the clone was really providing.
+`CHARTER.md §4` has the rule, and the measured failure that makes it worth stating.
 
 ## Launching a session you will not be able to talk to
 
@@ -64,9 +62,8 @@ carry on with the rest rather than stopping.
 This work will be checked against git and the published result, not against your summary.
 ```
 
-The last line is not decoration. A launched session's self-report is the one thing that cannot
-be verified from outside it, so say up front that the check runs on primary sources — and then
-run it.
+The last line is not decoration: a launched session's self-report is the one thing that cannot be
+verified from outside it (`CHARTER.md §8`). Say the check runs on primary sources — and run it.
 
 **Outward-facing actions cost one human approval, not a dead session.** Opening issues or pull
 requests, pushing, publishing, sending — a harness may hold these for confirmation even in a

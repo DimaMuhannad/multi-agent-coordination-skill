@@ -162,13 +162,19 @@ def check_rule(path):
 
 
 def find_rules_dir(explicit=None):
+    """Walk up from the cwd looking for `.claude/rules`, the only layout a project has.
+
+    The skill's own repository stages rule files under `assets/dot-claude/rules`, and this
+    function used to look there too. That made the tool's answer depend on which repository
+    it happened to be standing in; `--rules-dir` already says it explicitly.
+    """
     if explicit:
         return Path(explicit)
     here = Path.cwd().resolve()
     for base in [here, *here.parents]:
-        for candidate in (base / ".claude" / "rules", base / "assets" / "dot-claude" / "rules"):
-            if candidate.is_dir():
-                return candidate
+        candidate = base / ".claude" / "rules"
+        if candidate.is_dir():
+            return candidate
     return None
 
 

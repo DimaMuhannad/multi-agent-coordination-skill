@@ -71,15 +71,27 @@ _VOCABULARY_CASES = [
 
 
 @pytest.mark.parametrize("value", _VOCABULARY_CASES)
-def test_status_classification_is_identical_across_all_callers(value):
+def test_status_classification_is_identical_across_all_callers(value, tmp_path):
     """The anti-regression for the five divergent copies.
 
-    build_index.is_open kept its own substring rule while parser.py had two more and
-    components.py a fourth, so the same word meant different things in the index, the KPI
-    bar and the badge beside it.
+    build_index kept its own substring rule while parser.py had two more and components.py
+    a fourth, so the same word meant different things in the index, the KPI bar and the
+    badge beside it.
+
+    This goes through the real parse, not through a helper only the test calls: a wrapper
+    that build_index itself never invokes can agree with `schema` while the index does not.
     """
-    expected = schema.classify_item_status(value) == "open"
-    assert build_index.is_open(value) is expected
+    questions_md = tmp_path / "QUESTIONS.md"
+    questions_md.write_text(
+        "| # | Question | Owner's answer | Type | Status |\n"
+        "|---|---|---|---|---|\n"
+        "| Q-1 | Does it? | - | blocking | %s |\n" % value,
+        encoding="utf-8",
+    )
+    rows = build_index.parse_questions(str(questions_md))
+
+    assert len(rows) == 1
+    assert rows[0]["state"] == schema.classify_item_status(value)
 
 
 def test_unrecognised_status_is_not_reported_as_closed(tmp_path):
