@@ -92,9 +92,11 @@ follow it rather than improvising the layout, since later templates reference ea
 exact path. In short: copy everything under this skill's `assets/` into the target project
 (dropping the `.template` suffix where present, and `dot-claude/` becomes `.claude/`), then fill
 in the placeholders (`<PROJECT NAME>`, `<ID>`, `<LANGUAGE>`, role tables, zone descriptions) from
-the interview — one `roles/<ID>.md` per role the user named. Wire the `SessionStart` hook into
-`.claude/settings.json` per `references/setup.md §2`, and verify it actually fires before calling
-the setup done.
+the interview — one `roles/<ID>.md` per role the user named. Two files that layout marks
+optional are **not** installed now: `prompts/REVIEW.md` and `kpi_config.json`. Both answer a
+problem a new project has not had yet, and both are cheap to add the day it does. Wire the
+`SessionStart` hook into `.claude/settings.json` per `references/setup.md §2`, and verify it
+actually fires before calling the setup done.
 
 **Record the install stamp as the last step.** Once every placeholder is filled, run
 `python3 coordination/tools/upgrade.py --adopt --from <this-skill>/assets`. It writes
@@ -116,8 +118,8 @@ catch growth later, but a file that starts oversized normalizes staying oversize
 
 ### 3. Don't over-fill speculative content
 
-Several templates (`QUESTIONS.md`, `ACTIVITY.md`, `HANDOFFS.md`, `kpi_config.json`) are meant to
-start nearly empty and grow from real use, not be pre-populated with guessed content. Filling
+Several templates (`QUESTIONS.md`, `ACTIVITY.md`, `HANDOFFS.md`) are meant to start nearly empty
+and grow from real use, not be pre-populated with guessed content. Filling
 `OWNERSHIP.md`'s "conflict hot spots" section with hypothetical conflicts nobody's hit yet, for
 instance, produces noise a real conflict later will be buried under. Populate what the interview
 actually established; leave placeholders as placeholders where the project doesn't have an answer
