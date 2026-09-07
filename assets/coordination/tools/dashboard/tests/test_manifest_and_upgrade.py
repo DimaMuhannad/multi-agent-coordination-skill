@@ -233,6 +233,88 @@ def test_upstream_change_alone(project, upstream):
         upgrade_cli.UPSTREAM_ONLY
 
 
+@pytest.fixture
+def adopted_project(tmp_path, upstream):
+    """A project whose CHARTER.md was ALREADY hand-written when the baseline was frozen.
+
+    This is the case `--adopt` exists for: a live project whose doctrine files are its own
+    content, blessed rather than overwritten. The stamp therefore records a local hash that
+    differs from the source hash from the very first day.
+    """
+    root = tmp_path / "adopted"
+    for asset in manifest.hash_tree(upstream):
+        destination = root / manifest.installed_path_for(asset)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(upstream / asset, destination)
+    _write(root / "coordination" / "CHARTER.md",
+           "# CHARTER\n\nThis project's own rules, never the shipped seed.\n")
+    manifest.write_stamp(root / "coordination",
+                         manifest.build_stamp(upstream, root, adopted=True))
+    return root
+
+
+def test_customised_at_adoption_is_not_reported_as_safe_to_take(adopted_project, upstream):
+    """Same digest test, opposite correct action.
+
+    CHARTER.md is untouched *since* the baseline, which used to put it under "your copy is
+    untouched" and invite copying upstream across content that was the project's own before
+    the baseline existed.
+    """
+    with open(upstream / "coordination" / "CHARTER.md", "a", encoding="utf-8") as fh:
+        fh.write("\nAn unrelated upstream sentence.\n")
+    assert _report(adopted_project, upstream)["coordination/CHARTER.md"] == \
+        upgrade_cli.UPSTREAM_ONLY_BUT_CUSTOMIZED
+
+
+def test_a_pristine_file_in_an_adopted_project_is_still_safe_to_take(adopted_project, upstream):
+    """The true case must keep firing: in the SAME adopted project, a file that really was
+    installed verbatim still belongs in the safe bucket."""
+    with open(upstream / "coordination" / "tools" / "build_index.py", "a",
+              encoding="utf-8") as fh:
+        fh.write("# fixed\n")
+    assert _report(adopted_project, upstream)["coordination/tools/build_index.py"] == \
+        upgrade_cli.UPSTREAM_ONLY
+
+
+def test_customised_file_with_no_upstream_movement_stays_unchanged(adopted_project, upstream):
+    """No behaviour change for the common case: customised, but upstream stood still."""
+    assert _report(adopted_project, upstream)["coordination/CHARTER.md"] == \
+        upgrade_cli.UNCHANGED
+
+
+def test_a_stamp_without_upstream_hashes_does_not_guess(project, upstream):
+    """A stamp written before `upstream_sha256` existed has no evidence either way.
+
+    Report the ordinary category rather than inventing a customisation that may not have
+    happened -- a false "you customised this" is as misleading as the bug being fixed.
+    """
+    coordination = project / "coordination"
+    stamp = manifest.read_stamp(coordination)
+    for entry in stamp["files"].values():
+        entry.pop("upstream_sha256", None)
+    manifest.write_stamp(coordination, stamp)
+    with open(upstream / "coordination" / "CHARTER.md", "a", encoding="utf-8") as fh:
+        fh.write("\nlater\n")
+    rows = {row["path"]: row for row in upgrade_cli.compare(
+        manifest.read_stamp(coordination), project, upgrade_cli.hash_upstream(upstream))}
+    assert rows["coordination/CHARTER.md"]["customized_at_baseline"] is False
+    assert rows["coordination/CHARTER.md"]["category"] == upgrade_cli.UPSTREAM_ONLY
+
+
+def test_the_customised_bucket_renders_above_safe_to_take(adopted_project, upstream):
+    """Ordering is the fix, not decoration: a reader who copies everything under the first
+    heading that sounds safe has to meet the customised rows first."""
+    with open(upstream / "coordination" / "CHARTER.md", "a", encoding="utf-8") as fh:
+        fh.write("\nlater\n")
+    with open(upstream / "coordination" / "tools" / "build_index.py", "a",
+              encoding="utf-8") as fh:
+        fh.write("# fixed\n")
+    stamp = manifest.read_stamp(adopted_project / "coordination")
+    rows = upgrade_cli.compare(stamp, adopted_project, upgrade_cli.hash_upstream(upstream))
+    text = upgrade_cli.render(rows, stamp)
+    assert text.index("CUSTOMISED BEFORE ADOPTION") < text.index("Safe to take")
+
+
 def test_both_sides_changed_is_the_only_one_needing_a_human(project, upstream):
     target = "coordination/tools/coordlib/schema.py"
     with open(project / target, "a", encoding="utf-8") as fh:
@@ -317,6 +399,70 @@ def test_cli_exit_codes_and_json(project, upstream, capsys):
     payload = json.loads(capsys.readouterr().out)
     both = [r for r in payload["rows"] if r["category"] == upgrade_cli.BOTH]
     assert [r["path"] for r in both] == [target]
+
+
+def _customise_and_move_upstream(adopted_project, upstream):
+    """Put the adopted project in the state the exit-code rules are about."""
+    with open(upstream / "coordination" / "CHARTER.md", "a", encoding="utf-8") as fh:
+        fh.write("\nlater\n")
+    return str(adopted_project / "coordination")
+
+
+def test_an_old_baseline_keeps_the_exit_code_it_was_promised(adopted_project, upstream, capsys):
+    """A version-1 stamp predates the category, so it must not start failing builds.
+
+    Nothing about such a project changed -- only the tool's vocabulary did. Turning its CI
+    red for that would be the upgrade channel punishing a project for standing still.
+    """
+    coordination = _customise_and_move_upstream(adopted_project, upstream)
+    stamp = manifest.read_stamp(adopted_project / "coordination")
+    stamp["format"] = 1
+    manifest.write_stamp(adopted_project / "coordination", stamp)
+    assert upgrade_cli.main(["--from", str(upstream), "--coordination-dir", coordination]) == 0
+    assert "do not affect the exit code" in capsys.readouterr().out
+
+
+def test_an_old_baseline_can_opt_in_with_strict(adopted_project, upstream, capsys):
+    coordination = _customise_and_move_upstream(adopted_project, upstream)
+    stamp = manifest.read_stamp(adopted_project / "coordination")
+    stamp["format"] = 1
+    manifest.write_stamp(adopted_project / "coordination", stamp)
+    assert upgrade_cli.main(
+        ["--from", str(upstream), "--coordination-dir", coordination, "--strict"]) == 1
+    assert "FAIL the exit code" in capsys.readouterr().out
+
+
+def test_a_new_baseline_gates_on_the_customised_category_by_default(adopted_project, upstream):
+    """A baseline written by a tool that knows the category starts out gating on it: the risk
+    is the same as a `both` row, and this project never had a different promise."""
+    coordination = _customise_and_move_upstream(adopted_project, upstream)
+    assert manifest.read_stamp(adopted_project / "coordination")["format"] >= 2
+    assert upgrade_cli.main(["--from", str(upstream), "--coordination-dir", coordination]) == 1
+
+
+def test_a_new_baseline_can_opt_out_with_no_strict(adopted_project, upstream):
+    coordination = _customise_and_move_upstream(adopted_project, upstream)
+    assert upgrade_cli.main(
+        ["--from", str(upstream), "--coordination-dir", coordination, "--no-strict"]) == 0
+
+
+def test_no_strict_never_hides_a_both_row(project, upstream):
+    """--no-strict relaxes only the new category. The original gate is not negotiable."""
+    target = "coordination/tools/coordlib/schema.py"
+    for tree, note in ((project, "# mine\n"), (upstream, "# theirs\n")):
+        with open(tree / target, "a", encoding="utf-8") as fh:
+            fh.write(note)
+    assert upgrade_cli.main(["--from", str(upstream), "--no-strict",
+                             "--coordination-dir", str(project / "coordination")]) == 1
+
+
+def test_json_reports_which_gate_was_applied(adopted_project, upstream, capsys):
+    """A CI run that goes red should be able to say why without re-deriving the rule."""
+    coordination = _customise_and_move_upstream(adopted_project, upstream)
+    upgrade_cli.main(["--from", str(upstream), "--coordination-dir", coordination, "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["strict"] is True
+    assert payload["stamp"]["format"] >= 2
 
 
 def test_cli_without_a_stamp_says_run_adopt(tmp_path, upstream, capsys):

@@ -36,6 +36,7 @@ from coordlib.paths import find_coordination_dir, find_repo_root  # noqa: E402
 #: Categories, in the order a reader should work through them.
 UNCHANGED = "unchanged"
 UPSTREAM_ONLY = "upstream-only"
+UPSTREAM_ONLY_BUT_CUSTOMIZED = "upstream-only-but-customized"
 LOCAL_ONLY = "local-only"
 BOTH = "both"
 DELETED_LOCALLY = "deleted-locally"
@@ -82,10 +83,21 @@ def compare(stamp, project_root, upstream):
         upstream_baseline = entry.get("upstream_sha256", installed_baseline)
         upstream_digest, asset_path = upstream.get(installed_path, (None, entry.get("source")))
 
+        # The two baselines differ only when the file was ALREADY the project's own content
+        # at the moment the baseline was frozen -- the case `pre_existing_divergence()`
+        # reports once during --adopt and then forgets. Persisted here on every stamp entry,
+        # it is what keeps "unchanged since baseline" from being read as "still the shipped
+        # seed" on every later run. A stamp written before `upstream_sha256` existed defaults
+        # the two to equal, so an old stamp reports False rather than guessing.
+        customized_at_baseline = (installed_baseline is not None
+                                  and upstream_baseline is not None
+                                  and installed_baseline != upstream_baseline)
+
         row = {
             "path": installed_path,
             "class": file_class,
             "source": asset_path,
+            "customized_at_baseline": customized_at_baseline,
             # Compared against the UPSTREAM baseline, never the installed one: a file the
             # installer filled in differs from its source by design, and measuring upstream
             # movement against the filled copy would report a change nobody made.
@@ -112,7 +124,14 @@ def compare(stamp, project_root, upstream):
         if local_changed and row["upstream_changed"]:
             row["category"] = BOTH
         elif row["upstream_changed"]:
-            row["category"] = UPSTREAM_ONLY
+            # "Untouched since baseline" carries two different histories. For a file that was
+            # installed verbatim it means "still the generic template", and taking the new
+            # upstream copy is right. For one that was already hand-written when the baseline
+            # was frozen it means "still the project's own content" -- copying upstream over
+            # it discards exactly what --adopt was for. Same digest comparison, opposite
+            # correct action, so they cannot share a bucket called "safe to take".
+            row["category"] = (UPSTREAM_ONLY_BUT_CUSTOMIZED if customized_at_baseline
+                               else UPSTREAM_ONLY)
         elif local_changed:
             row["category"] = LOCAL_ONLY
         else:
@@ -126,6 +145,7 @@ def compare(stamp, project_root, upstream):
             "path": installed_path,
             "class": manifest.classify(installed_path),
             "source": asset_path,
+            "customized_at_baseline": False,
             "upstream_changed": True,
             "local_changed": None,
             "category": NEW_UPSTREAM,
@@ -145,6 +165,11 @@ _EXPLANATIONS = (
     (BOTH, "CHANGED ON BOTH SIDES - the only rows that need you",
      "Upstream changed these and so did you. Read both diffs and decide; nothing else here "
      "requires a judgement call."),
+    (UPSTREAM_ONLY_BUT_CUSTOMIZED,
+     "CUSTOMISED BEFORE ADOPTION, and upstream has moved since - review by hand",
+     "You have not touched these since the baseline was frozen, but they were already your "
+     "own content when that happened -- never the shipped seed. Read them like the rows "
+     "above, not like the ones below: copying upstream across discards the customisation."),
     (UPSTREAM_ONLY, "Safe to take - upstream changed, your copy is untouched",
      "These carry the fixes. Copy them across."),
     (NEW_UPSTREAM, "New upstream - did not exist when you installed",
@@ -158,7 +183,7 @@ _EXPLANATIONS = (
 )
 
 
-def render(rows, stamp, upstream_ref=""):
+def render(rows, stamp, upstream_ref="", strict=None):
     grouped = group(rows)
     lines = []
 
@@ -169,8 +194,15 @@ def render(rows, stamp, upstream_ref=""):
     if upstream_ref:
         lines.append("  compared against %s" % upstream_ref)
     if stamp.get("adopted"):
-        lines.append("  ! baseline was ADOPTED from files already on disk: any edits made")
-        lines.append("    before adoption are invisible to this comparison")
+        lines.append("  ! baseline was ADOPTED from files already on disk: what any")
+        lines.append("    pre-adoption edits changed is invisible to this comparison, though")
+        lines.append("    a file that already differed is marked customised, not pristine")
+    if strict is not None and grouped.get(UPSTREAM_ONLY_BUT_CUSTOMIZED):
+        # Whether these rows fail a build is a real difference in behaviour, and the reader
+        # deciding what to do with them is exactly who needs to know which way it went.
+        lines.append("  customised-before-adoption rows %s the exit code (%s)"
+                     % ("FAIL" if strict else "do not affect",
+                        "--no-strict to change" if strict else "--strict to change"))
     lines.append("")
 
     actionable = 0
@@ -246,6 +278,15 @@ def main(argv=None):
                         help="write a baseline from the files currently on disk, for a "
                              "project installed before stamping existed")
     parser.add_argument("--json", action="store_true")
+    # Three states, and the default is deliberately not a constant: None means "ask the
+    # stamp". See the strict resolution below and manifest.FORMAT_VERSION for why the answer
+    # depends on which era of the tool wrote the baseline.
+    parser.add_argument("--strict", dest="strict", action="store_true", default=None,
+                        help="also exit 1 when a file customised before adoption has moved "
+                             "upstream (the default for a baseline written by this version "
+                             "of the tool or newer)")
+    parser.add_argument("--no-strict", dest="strict", action="store_false",
+                        help="exit 1 only on a `both` row, whatever the baseline says")
     args = parser.parse_args(argv)
 
     upstream_dir = Path(args.upstream)
@@ -279,12 +320,13 @@ def main(argv=None):
             print("", file=sys.stderr)
             print("These %d file(s) ALREADY differ from %s and are now frozen into the"
                   % (len(diverged), upstream_dir), file=sys.stderr)
-            print("baseline as if they were pristine. This is your only chance to see them:",
-                  file=sys.stderr)
+            print("baseline as your content rather than as the shipped seed:", file=sys.stderr)
             for path in diverged:
                 print("    %s" % path, file=sys.stderr)
-        print("         Edits made before now are indistinguishable from pristine content;")
-        print("         every future report says so.")
+        print("         WHAT those edits were is not recoverable from here on: the baseline")
+        print("         records their result, not the seed they departed from. That they")
+        print("         happened is kept -- a later report files such a file under")
+        print("         \"customised before adoption\" instead of \"safe to take\".")
         return 0
 
     stamp = manifest.read_stamp(coordination)
@@ -299,15 +341,29 @@ def main(argv=None):
     upstream = hash_upstream(upstream_dir)
     rows = compare(stamp, project_root_for(coordination), upstream)
 
+    # A customised-before-adoption row carries the same risk as a `both` row -- a hand-written
+    # file that upstream has also moved -- so gating on it is right for a project that starts
+    # out knowing the category exists. It is NOT right to impose retroactively: a baseline
+    # written before this distinction existed belongs to a project whose CI was promised that
+    # red means `both`, and a project that has not changed must not go red because the tool
+    # learned to see something new. The stamp records which era wrote it, so neither case has
+    # to be guessed; `--strict` / `--no-strict` override the answer either way.
+    strict = args.strict
+    if strict is None:
+        strict = stamp.get("format", 1) >= 2
+
     if args.json:
         print(json.dumps({"stamp": {k: stamp.get(k) for k in
-                                    ("source_commit", "source_ref", "installed_at", "adopted")},
+                                    ("source_commit", "source_ref", "installed_at", "adopted",
+                                     "format")},
                           "upstream": str(upstream_dir),
+                          "strict": strict,
                           "rows": rows}, indent=2, ensure_ascii=False))
     else:
-        print(render(rows, stamp, upstream_ref=str(upstream_dir)))
+        print(render(rows, stamp, upstream_ref=str(upstream_dir), strict=strict))
 
-    return 1 if any(row["category"] == BOTH for row in rows) else 0
+    gating = (BOTH, UPSTREAM_ONLY_BUT_CUSTOMIZED) if strict else (BOTH,)
+    return 1 if any(row["category"] in gating for row in rows) else 0
 
 
 if __name__ == "__main__":

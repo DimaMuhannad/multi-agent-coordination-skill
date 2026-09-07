@@ -434,13 +434,27 @@ sorts every file into one bucket:
 | Bucket | What it means |
 |---|---|
 | `both` | upstream changed it **and** so did you — **the only rows needing a decision** |
+| `upstream-only-but-customized` | untouched *since* the baseline, but it was already your own content when the baseline was frozen — never the shipped seed. Review by hand; copying upstream across discards the customisation |
 | `upstream-only` | your copy is untouched; copy the new one across |
 | `new-upstream` | did not exist when you installed |
 | `deleted-locally` | reinstall, or confirm the removal was deliberate |
 | `seed-changed` | a template you filled in has moved upstream; compare and port what applies |
 | `local-only` | yours alone. Listed so you can see your customisations, never a problem |
 
-Exit 0 when nothing needs a person, 1 when a `both` row exists — usable as a CI gate.
+Exit 0 when nothing needs a person, 1 when a row needs one — usable as a CI gate. Which rows
+count depends on when the project's baseline was written, and the reason is worth a sentence:
+
+- A baseline written by **this version or newer** gates on `both` **and**
+  `upstream-only-but-customized`. The risk is the same in both — a hand-written file that
+  upstream has also moved — and a project starting out with the distinction never had a
+  different promise.
+- A baseline written **before this distinction existed** gates on `both` alone. Nothing about
+  such a project changed when the tool learned a new category, and an upgrade channel that
+  turns someone's CI red for standing still is one they will stop running.
+
+`--strict` gates on both categories regardless of baseline; `--no-strict` gates on `both`
+alone. Neither can hide a `both` row. The report says which way it went whenever a customised
+row is present, so a red build can explain itself.
 
 **It reports; it does not merge.** A three-way auto-merge of markdown that people have
 edited cannot be done without lying about the result, and a wrong merge of `CHARTER.md` is
@@ -461,12 +475,13 @@ whole report noise and noise gets ignored:
 python3 coordination/tools/upgrade.py --adopt --from <newer-skill-checkout>/assets
 ```
 
-Be clear-eyed about the trade: adoption records **today's** files as the baseline, so every
-edit made before now is frozen in as though it were pristine and can never be recovered by
-any tool. That is unavoidable offline. Two things make it honest rather than silent — the
-command prints the already-diverged files to stderr once, at the only moment they are still
-visible, so read that output; and the stamp records `adopted: true`, so every later report
-says what it cannot see.
+Be clear-eyed about the trade: adoption records **today's** files as the baseline, so *what*
+any edit made before now changed is gone and no tool can recover it. That much is unavoidable
+offline. *That* an edit happened is kept, though, because the stamp records both hashes — the
+content adopted and the source it was compared against — so a file that already differed is
+marked `upstream-only-but-customized` rather than `upstream-only` on every later report. Read
+the already-diverged list the command prints to stderr anyway: it names those files while you
+still have the context to say why each one differs.
 
 ## 11. Keeping the generated and the written in step
 
@@ -481,3 +496,7 @@ python3 coordination/tools/upgrade.py --from <skill>/assets              # upstr
 
 The first two catch a file and its source of truth drifting apart. The third catches the
 project drifting from upstream. None of them writes anything.
+
+If the project adopted the scaffold before `upstream-only-but-customized` existed and you
+*want* that row to fail the build too, add `--strict` to the third line — see §10 for what
+each baseline gates on by default.

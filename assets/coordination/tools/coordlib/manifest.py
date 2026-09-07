@@ -28,9 +28,18 @@ from .ownership import strip_leading_dot_slash
 #: Where the stamp lives inside an installed project, relative to the coordination directory.
 STAMP_NAME = ".scaffold-version"
 
-#: Manifest format version. Bumped only when the on-disk shape changes incompatibly, so a
-#: newer tool can tell "written by an older installer" from "corrupt".
-FORMAT_VERSION = 1
+#: Manifest format version -- which era of the tool wrote this stamp. Bumped when the on-disk
+#: shape changes incompatibly, so a newer tool can tell "written by an older installer" from
+#: "corrupt", and (from 2 onward) when the DEFAULT reading of an unchanged shape changes,
+#: which is the same question asked of the same field.
+#:
+#: Version 2 adds no keys and stays readable by a version-1 tool. It marks a stamp written by
+#: a tool that tells `upstream-only-but-customized` apart from `upstream-only`, which lets
+#: `upgrade.py` gate on that category by default. A version-1 stamp predates the distinction
+#: and is never gated on it unless `--strict` is passed: that project's CI was promised a
+#: specific meaning for a red build, and a project that has not changed must not turn red
+#: because the tool learned to see something new.
+FORMAT_VERSION = 2
 
 #: Never part of the scaffold: build artifacts, caches, and anything git already ignores by
 #: convention. Matched against the POSIX relative path and against each path segment.
