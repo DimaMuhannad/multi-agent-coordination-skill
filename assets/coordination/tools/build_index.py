@@ -72,6 +72,13 @@ def parse_questions(path, diagnostics=None):
         lines = fh.readlines()
 
     rows = []
+    # Ids are what `INDEX.md` exists to let a reader jump by, so one id meaning two rows
+    # defeats the file's purpose. It happens for two ordinary reasons in a project like this:
+    # a template's example rows left in place while the first real question takes the same
+    # number, and two roles appending a batch in parallel without seeing each other's. The
+    # dashboard's parser has always reported this; the dependency-free tool everyone actually
+    # installs did not, which made the check an accident of which layer you had.
+    seen_ids = {}
     for block in md_table.iter_table_blocks(lines):
         resolved = schema.resolve_headers(block.headers)
         if not schema.matches_signature(resolved, schema.QUESTIONS_TABLE_SIGNATURE):
@@ -91,6 +98,13 @@ def parse_questions(path, diagnostics=None):
             rid = schema.strip_decoration(cell("id"))
             if schema.is_placeholder_text(rid):
                 continue
+            if rid in seen_ids:
+                diag.record(
+                    diagnostics, diag.DUPLICATE_ID, path, row_index + 1,
+                    f"id already used on line {seen_ids[rid]}", rid,
+                )
+            else:
+                seen_ids[rid] = row_index + 1
             question = cell("question").replace("**", "")
             if len(question) > 110:
                 question = question[:107] + ELLIPSIS
@@ -309,8 +323,9 @@ def main():
         print(f"WARN {d}", file=sys.stderr)
     if diagnostics:
         print(
-            f"WARN {len(diagnostics)} item(s) could not be interpreted; they are listed under "
-            "'Unrecognised' in the index and counted in neither total.",
+            f"WARN {len(diagnostics)} item(s) need attention. Anything the tools could not "
+            "interpret is listed under 'Unrecognised' in the index and counted in neither "
+            "total; a duplicate id is read normally, it just no longer identifies one row.",
             file=sys.stderr,
         )
         if args.strict:

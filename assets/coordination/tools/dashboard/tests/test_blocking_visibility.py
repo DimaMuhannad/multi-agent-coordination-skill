@@ -137,3 +137,62 @@ def test_the_shipped_questions_template_has_no_open_blocker():
     """The scaffold must not ship a project into a red CI check on day one."""
     _, _, _, blocking = build_index.build_index_text(str(_ASSETS_DIR / "coordination"))
     assert blocking == 0
+
+
+# ---------------------------------------------------------------------------------------
+# Duplicate ids
+# ---------------------------------------------------------------------------------------
+
+def test_a_reused_id_is_reported(tmp_path):
+    """Two roles appending a batch in parallel is the ordinary way this happens."""
+    _write(tmp_path / "QUESTIONS.md",
+           "# Q\n\n| # | Question | Owner's answer | Type | Status |\n"
+           "|---|---|---|---|---|\n"
+           "| Q-1 | first | yes | non-blocking | resolved |\n"
+           "| Q-1 | second, from another session | no | non-blocking | resolved |\n")
+    _write(tmp_path / "HANDOFFS.md", "# H\n")
+    sink = diag.DiagnosticList()
+    rows = build_index.parse_questions(str(tmp_path / "QUESTIONS.md"), sink)
+    assert diag.DUPLICATE_ID in sink.codes()
+    # Reported, not dropped: the row is perfectly readable, its id just no longer picks out
+    # one row, and silently hiding half a journal would be the worse failure.
+    assert len(rows) == 2
+
+
+def test_a_reused_id_across_two_tables_is_reported(tmp_path):
+    """The reported case: the template's example batch left in place above a real one."""
+    _write(tmp_path / "QUESTIONS.md",
+           "# Q\n\n## Example batch\n\n| # | Question | Owner's answer | Type | Status |\n"
+           "|---|---|---|---|---|\n| Q-1 | example | x | non-blocking | resolved |\n"
+           "\n## Real batch\n\n| # | Question | Owner's answer | Type | Status |\n"
+           "|---|---|---|---|---|\n| Q-1 | the real one | y | non-blocking | resolved |\n")
+    _write(tmp_path / "HANDOFFS.md", "# H\n")
+    sink = diag.DiagnosticList()
+    build_index.parse_questions(str(tmp_path / "QUESTIONS.md"), sink)
+    assert diag.DUPLICATE_ID in sink.codes()
+
+
+def test_distinct_ids_report_nothing(tmp_path):
+    """The true case: the check must stay silent on an ordinary journal."""
+    _write(tmp_path / "QUESTIONS.md", QUESTIONS)
+    _write(tmp_path / "HANDOFFS.md", "# H\n")
+    sink = diag.DiagnosticList()
+    build_index.parse_questions(str(tmp_path / "QUESTIONS.md"), sink)
+    assert diag.DUPLICATE_ID not in sink.codes()
+
+
+def test_the_shipped_template_leaves_q1_free_for_a_real_question(tmp_path):
+    """The fix that removes the collision rather than detecting it.
+
+    A project that adds its first real question as `Q-1` without first deleting the example
+    batch -- which nothing tells it to do -- must not collide with the shipped rows.
+    """
+    shipped = (_ASSETS_DIR / "coordination" / "QUESTIONS.md").read_text(encoding="utf-8")
+    _write(tmp_path / "QUESTIONS.md", shipped +
+           "\n## First real batch\n\n| # | Question | Owner's answer | Type | Status |\n"
+           "|---|---|---|---|---|\n| Q-1 | a real one | yes | blocking | resolved |\n")
+    _write(tmp_path / "HANDOFFS.md", "# H\n")
+    sink = diag.DiagnosticList()
+    rows = build_index.parse_questions(str(tmp_path / "QUESTIONS.md"), sink)
+    assert diag.DUPLICATE_ID not in sink.codes()
+    assert sorted(row["id"] for row in rows) == ["EX-1", "EX-2", "Q-1"]
