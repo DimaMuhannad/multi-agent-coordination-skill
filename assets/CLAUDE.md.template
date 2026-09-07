@@ -63,17 +63,23 @@ version, and `coordination/tools/check_rules.py` to check your files against the
 
 ## Automatic checks
 
-This scaffold installs two hooks (`references/setup.md` wires them up):
+This scaffold ships three hooks (`references/setup.md` wires them up; the last two are opt-in):
 
 | Hook | Event | Effect |
 |---|---|---|
 | `check-context-budget.py` | `SessionStart` | warns when a role file exceeds its byte budget; **never blocks** |
 | `check-path-ownership.py` | `PreToolUse` | denies a file write outside your zone in `OWNERSHIP.md` |
+| `check-commit-trailers.py` | `PostToolUse` | reports a commit whose `CHARTER.md §4` trailers git did not parse |
 
 The ownership hook exists because instruction files are context, not configuration: Claude Code
 treats them as guidance and a hook is the documented way to block an action regardless. It does
 not inspect `Bash`, so a shell command that writes is not caught — use `permissions.deny` for
 paths that must never be touched at all.
+
+The trailer hook exists for the same reason, measured rather than assumed: sessions that had
+just read `CHARTER.md §4` still produced commits whose trailer block git could not parse. It
+runs *after* a `Bash` command and asks git what git sees, so unlike the ownership hook it
+predicts nothing about the shell — it reads a commit that already exists.
 
 To debug which instruction files actually loaded, and why a path-scoped rule did or didn't
 fire, use the `InstructionsLoaded` hook.
