@@ -129,7 +129,7 @@ itself, read `coordination/roles/<ID>.md`. That's it.
 - **A shared file needed by two roles** → whoever announced first in `ACTIVITY.md` goes first,
   the other waits.
 
-## 8. Background workers (subagents)
+## 8. Delegated work: subagents and launched sessions
 
 **Boundary: a subagent is not a role session.** A subagent has its own context window, starts
 from nothing (it doesn't see the calling session's history), doesn't survive the call that
@@ -148,6 +148,25 @@ spawned it, has no transcript kept, and isn't listed by `claude agents`. Concret
   regardless of what it's named or what it's meant to represent. If you want per-role launch
   ergonomics, that belongs in `LAUNCH_PROMPTS.md` as a prompt template a human or session reads
   and acts on — not as a subagent definition standing in for a zone-holding role.
+
+**A session you launched is a third thing, and the channel to it is one-way.** A subagent
+returns its result to whoever called it. A separately launched session — a cloud session started
+through an API or a web UI, a session on another machine — has exactly one input, the prompt that
+started it, and no return channel. Measured over a week on Claude Code for the web: every attempt
+to message a launched session failed (`No agent named ... is reachable`), the harness listed no
+reachable agents, and no tool read the session's transcript — the status field carries a coarse
+summary, not the conversation. Assume this of any harness until you have checked otherwise: the
+cost of assuming the opposite is work that nobody notices was never done.
+
+- **The whole task goes in the opening prompt.** There is no "start it and steer it as it goes."
+  A launched session that needs a decision mid-flight stops, and nothing announces that it did.
+- **Its result must land somewhere durable, or it does not exist** — a commit, a pushed branch, a
+  published page. Name that destination in the prompt; the session's reply is not a destination.
+- **Verify against primary sources, never the session's own report.** `git fetch` and then
+  `git log` on the branch it claims to have pushed, the file on disk, the Issue or PR through the
+  API. Measured case: a launched session reported "7 bugs fixed, 93 tests passing" and had not
+  opened the PR it was asked to open. The summary was confident and wrong; only the independent
+  check caught it. `LAUNCH_PROMPTS.md` has the prompt shape that survives all three.
 
 ## 9. Communication style with the owner
 

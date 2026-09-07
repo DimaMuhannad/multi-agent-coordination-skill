@@ -46,6 +46,38 @@ thing the clone was really providing. `CHARTER.md §4` has the rule and the fail
 a stale remote-tracking ref once produced a confident "53 commits at risk of being lost", which
 is precisely the kind of belief that provokes a force-push against a problem that never existed.
 
+## Launching a session you will not be able to talk to
+
+A session started from another session — cloud, remote, or on a schedule — is not a subagent:
+nothing you send afterwards reaches it, and you cannot read its transcript (`CHARTER.md §8` has
+the measurements). Its opening prompt is the entire briefing, so write it as one:
+
+```
+The repository is already checked out; do not clone it. Read coordination/roles/<ID>.md.
+
+Task: <the complete task, including every decision already taken — this session cannot ask>
+
+When done: <commit to branch <X> / publish the result and report its URL>. If something is
+genuinely undecidable, write the question into coordination/QUESTIONS.md, commit it, and
+carry on with the rest rather than stopping.
+
+This work will be checked against git and the published result, not against your summary.
+```
+
+The last line is not decoration. A launched session's self-report is the one thing that cannot
+be verified from outside it, so say up front that the check runs on primary sources — and then
+run it.
+
+**Outward-facing actions cost one human approval, not a dead session.** Opening issues or pull
+requests, pushing, publishing, sending — a harness may hold these for confirmation even in a
+session that was told to expect it. Observed: the gate fires on the class of action, not on the
+wording, so a prompt that politely anticipates it buys nothing; the session parks before doing
+anything, and its status is indistinguishable from ordinary idleness. One human opening it
+releases the whole queue in a single turn. So either the launching session performs the
+outward-facing step itself, where it holds the credentials, or the human is told upfront that
+they will need to open the session once. What does not work is scheduling such a session
+unattended and assuming it ran.
+
 ## If your project also uses a different tool/agent (no session names, no `/loop`, etc.)
 
 Note the genuinely different mechanics briefly rather than duplicating the whole table — e.g. "no
