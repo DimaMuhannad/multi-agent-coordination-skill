@@ -120,6 +120,29 @@ as expected in your version of the tooling before building an unload plan on top
 as of this writing — see `references/setup.md §3` for the exact frontmatter and load semantics),
 rather than assuming from a project's internal docs that a feature works a particular way.
 
+## Why there is no hook watching the orchestrator's own context
+
+The obvious companion to the cold-start budget hook is one that warns when the *orchestrator's*
+context grows too large — same shape, same warn-never-block posture, aimed at the resource that
+turns out to dominate per-turn cost (`CHARTER.md §10` carries the measurement: 2400-byte role
+files next to a 508,093-token orchestrator session). It was considered and deliberately not built.
+
+A hook is handed an event payload, and nothing in it reports the session's live context usage; no
+file in the repository knows it either. The only thing that does is the harness's own local
+transcript — which is exactly the dependency this scaffold already dropped once. The source
+project's first KPI collector read `~/.claude/projects/**/*.jsonl` and was retired in favour of
+`kpi_git.py` because transcripts are tied to one machine, invisible to every other environment
+working on the same project, and blind to subagents. A context hook would rebuild that dependency
+for a smaller payoff, and it would answer "what is this session doing right now" out of
+machine-local state — precisely the class of mechanism `CHARTER.md §10`'s first standing duty
+exists to catch growing back.
+
+What *is* checkable becomes the rule instead: the handover leaves a dated entry in `ACTIVITY.md`.
+That entry is either in git or it is not — visible from any machine, needing no new tool, and
+readable by a session that has never seen the one that wrote it. It is also the thing that
+actually matters. A token count is only a proxy for the risk that something is lost when a session
+ends; the journal entry is that risk being absent.
+
 ## The general pattern underneath all of the above
 
 Every one of these is the same shape: a rule that lives only in a human-readable document decays

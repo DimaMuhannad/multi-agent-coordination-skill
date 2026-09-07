@@ -168,3 +168,18 @@ orchestrator consolidates.
 **A standing orchestrator duty:** watch for cancelled mechanisms growing back. A new rule that
 answers "who's working right now" is redundant by construction — git answers it, and on a
 single machine the tool's own session list answers it sooner.
+
+**A second standing duty: hand over before you are forced to.** The orchestrator session is the
+one that grows without bound — every launch, every verification, every scheduled firing appends to
+it, and all of it is re-read on every turn. Measured on one project: role files were held to 2400
+bytes each while the orchestrator's own context reached 508,093 tokens of a 1,000,000 budget, so
+the coordination layer cost more per turn than the work it was coordinating. Note which half of
+that the budget hook was watching.
+
+So when the session grows long: write what matters into `ACTIVITY.md` as one dated entry **first**,
+then compact or start a fresh orchestrator session — in that order, and before anything forces the
+choice. This is the cheap operation the rest of the scaffold exists to make cheap: the handover
+costs one journal entry, because everything the next session needs is already in files. The
+failure mode is the opposite belief — that a long-running session is precious and restarting it is
+expensive — which is what lets one session run for weeks and carry its whole history into every
+turn.
