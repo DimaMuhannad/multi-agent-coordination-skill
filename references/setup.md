@@ -80,6 +80,7 @@ coordination/
   hooks/
     check-context-budget.py
     check-path-ownership.py   (optional but recommended — see §9)
+    check-commit-trailers.py  (optional but recommended — see §9)
     budget.json      (from budget.json.template)
   rules/
     <topic>.md        (optional, path-scoped — see §3)
@@ -416,6 +417,54 @@ misplaced confidence the hook exists to remove. For paths that must never be tou
 use `permissions.deny`. And it governs the sessions that run it — a teammate on another
 machine without the hook installed is unaffected, which is why the generated `CODEOWNERS` plus
 branch protection (§6) is the rail that catches that case.
+
+### The commit-trailer hook, same opt-in shape
+
+`CHARTER.md §4` requires the trailer block to be the last paragraph with no blank line inside
+it, because that is what `git interpret-trailers` requires. Sessions do not reliably comply
+with it from reading alone — 10 of 29 commits in one week in the source project, and 1 of 7 in
+a later controlled run where every session had just read the rule. Wire this one the same way,
+on `PostToolUse`:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/check-commit-trailers.py",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Verify it the same way, against a commit you make on purpose with a blank line before a
+signature:
+
+```bash
+echo '{"tool_name":"Bash","cwd":"'"$PWD"'","tool_input":{"command":"git commit"}}' \
+  | python .claude/hooks/check-commit-trailers.py
+```
+
+A well-formed commit prints nothing; a broken one gives back `"decision": "block"` with the
+reason, which the session sees and fixes with `git commit --amend`. The commit is not undone —
+`PostToolUse` runs after the fact, so this is feedback, not a barrier.
+
+Note that this hook *does* key on `Bash`, which the ownership hook above refuses to do. The
+difference is prediction: the ownership hook would have to guess, beforehand, where a shell
+command writes. This one guesses nothing — it runs afterwards and asks git what git parsed on
+a commit that already exists. Being wrong costs a line of output rather than a blocked write.
+
+If your project renamed the trailer keys in its own `CHARTER.md`, say so rather than living
+with a report on every commit: `COORDINATION_TRAILER_KEYS=Ticket,Why`. Renaming points the
+check elsewhere; it does not switch it off.
 
 ## 10. Receiving upstream fixes
 

@@ -58,9 +58,13 @@ handoff.
   Session: <ID>
   Reason: <why> — one line, a line break breaks the whole block
   ```
-  If your project can wire up a `PostToolUse` hook that runs `git interpret-trailers --parse`
-  after every commit and reports back when trailers didn't parse, do it — a rule enforced by a
-  hook stays true; a rule that only lives in this document rots the moment nobody's checking.
+  This one does not hold on attention, and that is measured, not assumed: 10 of 29 commits in
+  one week carried a `Session:` line git did not recognise, and in a later run 1 of 7 commits
+  by sessions that had just read this section had no trailer block at all. So the scaffold
+  ships the check — `.claude/hooks/check-commit-trailers.py`, wired per `references/setup.md
+  §9`. It asks git what git parses, after the commit, and tells you to `--amend` when the
+  answer is nothing. A rule enforced by a hook stays true; a rule that only lives in this
+  document rots the moment nobody's checking.
 - Commit **only your own paths** — no blind `git add -A`.
 - **`git fetch` before you say anything about `origin`.** A remote-tracking ref is a cache, and
   in an ephemeral or long-lived container it can predate a push that already landed — including
