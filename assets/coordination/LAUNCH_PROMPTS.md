@@ -78,6 +78,36 @@ outward-facing step itself, where it holds the credentials, or the human is told
 they will need to open the session once. What does not work is scheduling such a session
 unattended and assuming it ran.
 
+### On a schedule: bind to a session, or bootstrap the fresh one
+
+A scheduled run is a launched session with a clock instead of a caller, and the mode matters more
+than the cadence. Two exist:
+
+- **Bound to an existing session** — the firing lands in a session that is already running, with
+  the checkout, the URLs and the history it has accumulated. **This is the default for anything
+  repo-bound**: regenerating `INDEX.md`, refreshing KPI output, updating a published page.
+- **A fresh session per firing** — starts empty. No checkout, no artifact URL, nothing. A prompt
+  like "run `coordination/tools/kpi_git.py` from the repo root and republish" then has nothing to
+  run against, and the firing is a silent no-op: it reports no error, it simply does nothing.
+  This was the first configuration tried in the field report behind this section, and it produced
+  nothing until it was noticed by hand.
+
+Binding to a session is not free either — the run inherits that session's context and cost, and
+stops working the day that session ends. Take that trade knowingly rather than by default.
+
+If a fresh session per firing is genuinely what you want, its opening prompt must do the bootstrap
+itself: get the repository (`git fetch origin main && git reset --hard origin/main`, or clone if
+there is nothing to fetch into), then — if the tooling needs real history, as `kpi_git.py` does
+walking `--all` — check `git rev-parse --is-shallow-repository` and `git fetch --unshallow`, and
+only then read any published page by its URL.
+
+**Check what "leave it unchanged" actually does before writing it into a scheduled prompt.**
+Omitting a field is not the same as preserving it. A daily republish here told the session to omit
+the page's title "so as not to change manually-set metadata"; omitting it made the publisher
+re-derive the title from a temporary filename instead, and the page quietly renamed itself on
+eight consecutive days before anyone connected the two. A scheduled prompt repeats its mistake
+every firing, which is exactly what makes a small wrong assumption expensive.
+
 ## If your project also uses a different tool/agent (no session names, no `/loop`, etc.)
 
 Note the genuinely different mechanics briefly rather than duplicating the whole table — e.g. "no
