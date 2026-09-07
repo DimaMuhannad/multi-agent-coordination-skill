@@ -441,7 +441,20 @@ sorts every file into one bucket:
 | `seed-changed` | a template you filled in has moved upstream; compare and port what applies |
 | `local-only` | yours alone. Listed so you can see your customisations, never a problem |
 
-Exit 0 when nothing needs a person, 1 when a `both` row exists — usable as a CI gate.
+Exit 0 when nothing needs a person, 1 when a row needs one — usable as a CI gate. Which rows
+count depends on when the project's baseline was written, and the reason is worth a sentence:
+
+- A baseline written by **this version or newer** gates on `both` **and**
+  `upstream-only-but-customized`. The risk is the same in both — a hand-written file that
+  upstream has also moved — and a project starting out with the distinction never had a
+  different promise.
+- A baseline written **before this distinction existed** gates on `both` alone. Nothing about
+  such a project changed when the tool learned a new category, and an upgrade channel that
+  turns someone's CI red for standing still is one they will stop running.
+
+`--strict` gates on both categories regardless of baseline; `--no-strict` gates on `both`
+alone. Neither can hide a `both` row. The report says which way it went whenever a customised
+row is present, so a red build can explain itself.
 
 **It reports; it does not merge.** A three-way auto-merge of markdown that people have
 edited cannot be done without lying about the result, and a wrong merge of `CHARTER.md` is
@@ -483,3 +496,7 @@ python3 coordination/tools/upgrade.py --from <skill>/assets              # upstr
 
 The first two catch a file and its source of truth drifting apart. The third catches the
 project drifting from upstream. None of them writes anything.
+
+If the project adopted the scaffold before `upstream-only-but-customized` existed and you
+*want* that row to fail the build too, add `--strict` to the third line — see §10 for what
+each baseline gates on by default.

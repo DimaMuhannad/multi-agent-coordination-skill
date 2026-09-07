@@ -401,6 +401,70 @@ def test_cli_exit_codes_and_json(project, upstream, capsys):
     assert [r["path"] for r in both] == [target]
 
 
+def _customise_and_move_upstream(adopted_project, upstream):
+    """Put the adopted project in the state the exit-code rules are about."""
+    with open(upstream / "coordination" / "CHARTER.md", "a", encoding="utf-8") as fh:
+        fh.write("\nlater\n")
+    return str(adopted_project / "coordination")
+
+
+def test_an_old_baseline_keeps_the_exit_code_it_was_promised(adopted_project, upstream, capsys):
+    """A version-1 stamp predates the category, so it must not start failing builds.
+
+    Nothing about such a project changed -- only the tool's vocabulary did. Turning its CI
+    red for that would be the upgrade channel punishing a project for standing still.
+    """
+    coordination = _customise_and_move_upstream(adopted_project, upstream)
+    stamp = manifest.read_stamp(adopted_project / "coordination")
+    stamp["format"] = 1
+    manifest.write_stamp(adopted_project / "coordination", stamp)
+    assert upgrade_cli.main(["--from", str(upstream), "--coordination-dir", coordination]) == 0
+    assert "do not affect the exit code" in capsys.readouterr().out
+
+
+def test_an_old_baseline_can_opt_in_with_strict(adopted_project, upstream, capsys):
+    coordination = _customise_and_move_upstream(adopted_project, upstream)
+    stamp = manifest.read_stamp(adopted_project / "coordination")
+    stamp["format"] = 1
+    manifest.write_stamp(adopted_project / "coordination", stamp)
+    assert upgrade_cli.main(
+        ["--from", str(upstream), "--coordination-dir", coordination, "--strict"]) == 1
+    assert "FAIL the exit code" in capsys.readouterr().out
+
+
+def test_a_new_baseline_gates_on_the_customised_category_by_default(adopted_project, upstream):
+    """A baseline written by a tool that knows the category starts out gating on it: the risk
+    is the same as a `both` row, and this project never had a different promise."""
+    coordination = _customise_and_move_upstream(adopted_project, upstream)
+    assert manifest.read_stamp(adopted_project / "coordination")["format"] >= 2
+    assert upgrade_cli.main(["--from", str(upstream), "--coordination-dir", coordination]) == 1
+
+
+def test_a_new_baseline_can_opt_out_with_no_strict(adopted_project, upstream):
+    coordination = _customise_and_move_upstream(adopted_project, upstream)
+    assert upgrade_cli.main(
+        ["--from", str(upstream), "--coordination-dir", coordination, "--no-strict"]) == 0
+
+
+def test_no_strict_never_hides_a_both_row(project, upstream):
+    """--no-strict relaxes only the new category. The original gate is not negotiable."""
+    target = "coordination/tools/coordlib/schema.py"
+    for tree, note in ((project, "# mine\n"), (upstream, "# theirs\n")):
+        with open(tree / target, "a", encoding="utf-8") as fh:
+            fh.write(note)
+    assert upgrade_cli.main(["--from", str(upstream), "--no-strict",
+                             "--coordination-dir", str(project / "coordination")]) == 1
+
+
+def test_json_reports_which_gate_was_applied(adopted_project, upstream, capsys):
+    """A CI run that goes red should be able to say why without re-deriving the rule."""
+    coordination = _customise_and_move_upstream(adopted_project, upstream)
+    upgrade_cli.main(["--from", str(upstream), "--coordination-dir", coordination, "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["strict"] is True
+    assert payload["stamp"]["format"] >= 2
+
+
 def test_cli_without_a_stamp_says_run_adopt(tmp_path, upstream, capsys):
     coordination = tmp_path / "bare" / "coordination"
     coordination.mkdir(parents=True)

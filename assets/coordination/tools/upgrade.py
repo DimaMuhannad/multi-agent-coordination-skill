@@ -183,7 +183,7 @@ _EXPLANATIONS = (
 )
 
 
-def render(rows, stamp, upstream_ref=""):
+def render(rows, stamp, upstream_ref="", strict=None):
     grouped = group(rows)
     lines = []
 
@@ -197,6 +197,12 @@ def render(rows, stamp, upstream_ref=""):
         lines.append("  ! baseline was ADOPTED from files already on disk: what any")
         lines.append("    pre-adoption edits changed is invisible to this comparison, though")
         lines.append("    a file that already differed is marked customised, not pristine")
+    if strict is not None and grouped.get(UPSTREAM_ONLY_BUT_CUSTOMIZED):
+        # Whether these rows fail a build is a real difference in behaviour, and the reader
+        # deciding what to do with them is exactly who needs to know which way it went.
+        lines.append("  customised-before-adoption rows %s the exit code (%s)"
+                     % ("FAIL" if strict else "do not affect",
+                        "--no-strict to change" if strict else "--strict to change"))
     lines.append("")
 
     actionable = 0
@@ -272,6 +278,15 @@ def main(argv=None):
                         help="write a baseline from the files currently on disk, for a "
                              "project installed before stamping existed")
     parser.add_argument("--json", action="store_true")
+    # Three states, and the default is deliberately not a constant: None means "ask the
+    # stamp". See the strict resolution below and manifest.FORMAT_VERSION for why the answer
+    # depends on which era of the tool wrote the baseline.
+    parser.add_argument("--strict", dest="strict", action="store_true", default=None,
+                        help="also exit 1 when a file customised before adoption has moved "
+                             "upstream (the default for a baseline written by this version "
+                             "of the tool or newer)")
+    parser.add_argument("--no-strict", dest="strict", action="store_false",
+                        help="exit 1 only on a `both` row, whatever the baseline says")
     args = parser.parse_args(argv)
 
     upstream_dir = Path(args.upstream)
@@ -326,15 +341,29 @@ def main(argv=None):
     upstream = hash_upstream(upstream_dir)
     rows = compare(stamp, project_root_for(coordination), upstream)
 
+    # A customised-before-adoption row carries the same risk as a `both` row -- a hand-written
+    # file that upstream has also moved -- so gating on it is right for a project that starts
+    # out knowing the category exists. It is NOT right to impose retroactively: a baseline
+    # written before this distinction existed belongs to a project whose CI was promised that
+    # red means `both`, and a project that has not changed must not go red because the tool
+    # learned to see something new. The stamp records which era wrote it, so neither case has
+    # to be guessed; `--strict` / `--no-strict` override the answer either way.
+    strict = args.strict
+    if strict is None:
+        strict = stamp.get("format", 1) >= 2
+
     if args.json:
         print(json.dumps({"stamp": {k: stamp.get(k) for k in
-                                    ("source_commit", "source_ref", "installed_at", "adopted")},
+                                    ("source_commit", "source_ref", "installed_at", "adopted",
+                                     "format")},
                           "upstream": str(upstream_dir),
+                          "strict": strict,
                           "rows": rows}, indent=2, ensure_ascii=False))
     else:
-        print(render(rows, stamp, upstream_ref=str(upstream_dir)))
+        print(render(rows, stamp, upstream_ref=str(upstream_dir), strict=strict))
 
-    return 1 if any(row["category"] == BOTH for row in rows) else 0
+    gating = (BOTH, UPSTREAM_ONLY_BUT_CUSTOMIZED) if strict else (BOTH,)
+    return 1 if any(row["category"] in gating for row in rows) else 0
 
 
 if __name__ == "__main__":
