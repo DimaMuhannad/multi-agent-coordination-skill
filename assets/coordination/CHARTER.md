@@ -78,6 +78,15 @@ handoff.
 - A shared-file conflict on `main` → don't force it, call the orchestrator.
 - Don't reference commit hashes in coordination docs — link by date + file instead (hashes churn
   if history is ever rewritten; dates don't).
+- **Never commit secrets** — API keys, connection strings, tokens, private keys. Keep them in an
+  untracked, gitignored `.env` or the platform's own secret store, never inside a role's tracked
+  zone, and never hardcoded into a config file "just for testing." Don't reinvent a scanner for
+  this: an existing one (`gitleaks`, `trufflehog`) as a pre-commit or CI step catches far more
+  than a scaffold-local regex would, and stays maintained by people whose whole job is that list.
+- **Heavy binaries don't belong in `coordination/`** — durable knowledge here is markdown and
+  JSON. Screenshots, audio, and photos captured during work belong in object storage or Git LFS,
+  not the coordination tree; `coordination/tools/check-context-budget.py`'s glob + `limit_bytes`
+  rules (`references/setup.md §2`) can warn when one lands there anyway.
 
 ## 5. Isolation (git)
 
