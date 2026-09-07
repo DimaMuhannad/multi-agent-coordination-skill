@@ -506,10 +506,10 @@ class TestAdversarialBuildIndexCompatibility(unittest.TestCase):
             self.assertEqual(len(q_rows), 3)
             self.assertEqual(len(h_rows), 2)
 
-            q_open = [r for r in q_rows if bi.is_open(r["status"])]
-            q_closed = [r for r in q_rows if not bi.is_open(r["status"])]
-            h_open = [r for r in h_rows if bi.is_open(r["status"]) or r["status"] == "missing"]
-            h_closed = [r for r in h_rows if not bi.is_open(r["status"]) and r["status"] != "missing"]
+            q_open = [r for r in q_rows if r["state"] == "open"]
+            q_closed = [r for r in q_rows if r["state"] != "open"]
+            h_open = [r for r in h_rows if r["state"] == "open" or r["status"] == "missing"]
+            h_closed = [r for r in h_rows if r["state"] != "open" and r["status"] != "missing"]
 
             self.assertEqual(len(q_open), 1)  # Only Q-3 is open
             self.assertEqual(q_open[0]["id"], "Q-3")

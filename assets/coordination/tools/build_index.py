@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from coordlib import diagnostics as diag  # noqa: E402
 from coordlib import md_table, schema  # noqa: E402
-from coordlib.md_table import SEP_RE, split_table_row  # noqa: E402,F401
+from coordlib.md_table import split_table_row  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 COORD = os.path.join(ROOT, "coordination")
@@ -47,16 +47,6 @@ HEADER_RE = re.compile(r"^##\s+\[([^\]]+)\]\s*(.*)$")
 EM_DASH = "\u2014"
 ELLIPSIS = "\u2026"
 WARNING_SIGN = "\u26a0"
-
-#: Kept as a module-level name because callers and tests import it. Now one shared rule
-#: instead of this file's own substring copy, which disagreed with the dashboard's two.
-def is_open(status):
-    return schema.classify_item_status(status) == "open"
-
-
-#: Historic alias: this file's own tokenizer used line.strip("|"), which eats cells from
-#: doubled borders and ignored backtick code spans. coordlib's is the careful one.
-split_row = split_table_row
 
 
 def parse_questions(path, diagnostics=None):
