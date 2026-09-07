@@ -434,6 +434,7 @@ sorts every file into one bucket:
 | Bucket | What it means |
 |---|---|
 | `both` | upstream changed it **and** so did you — **the only rows needing a decision** |
+| `upstream-only-but-customized` | untouched *since* the baseline, but it was already your own content when the baseline was frozen — never the shipped seed. Review by hand; copying upstream across discards the customisation |
 | `upstream-only` | your copy is untouched; copy the new one across |
 | `new-upstream` | did not exist when you installed |
 | `deleted-locally` | reinstall, or confirm the removal was deliberate |
@@ -461,12 +462,13 @@ whole report noise and noise gets ignored:
 python3 coordination/tools/upgrade.py --adopt --from <newer-skill-checkout>/assets
 ```
 
-Be clear-eyed about the trade: adoption records **today's** files as the baseline, so every
-edit made before now is frozen in as though it were pristine and can never be recovered by
-any tool. That is unavoidable offline. Two things make it honest rather than silent — the
-command prints the already-diverged files to stderr once, at the only moment they are still
-visible, so read that output; and the stamp records `adopted: true`, so every later report
-says what it cannot see.
+Be clear-eyed about the trade: adoption records **today's** files as the baseline, so *what*
+any edit made before now changed is gone and no tool can recover it. That much is unavoidable
+offline. *That* an edit happened is kept, though, because the stamp records both hashes — the
+content adopted and the source it was compared against — so a file that already differed is
+marked `upstream-only-but-customized` rather than `upstream-only` on every later report. Read
+the already-diverged list the command prints to stderr anyway: it names those files while you
+still have the context to say why each one differs.
 
 ## 11. Keeping the generated and the written in step
 
