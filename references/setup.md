@@ -252,9 +252,13 @@ python -m pytest                       # everything, including the dashboard UI 
 ```
 
 Neither needs registering anywhere — run them manually, or wire either into a scheduled task if
-your tooling supports one (e.g. a Claude Code Routine that clones the repo read-only, regenerates
-`INDEX.md`, and commits it — only worth doing once the journals are large enough that a stale
-index is actually costing someone time).
+your tooling supports one, once the journals are large enough that a stale index is actually
+costing someone time. If you do schedule one, read the scheduling part of
+`assets/coordination/LAUNCH_PROMPTS.md` first: a scheduled run that starts a *fresh* session
+gets no checkout and no history, so "regenerate `INDEX.md` from the repo root" has nothing to run
+against and the firing is a silent no-op. Binding the schedule to a session that already has the
+checkout is the working default for anything repo-bound; a fresh session needs its bootstrap
+written into the prompt, `kpi_git.py`'s `--all` walk included.
 
 `kpi_git.py` reads `coordination/tools/kpi_config.json` if present (template:
 `kpi_config.json.template`) — leave it absent until you actually hit the two problems it solves
