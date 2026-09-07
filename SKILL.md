@@ -155,6 +155,15 @@ the repository, is scoped to one session, and is discarded when it ends. The jou
 and write anything that must outlive the session into `HANDOFFS.md`, `QUESTIONS.md` or
 `ACTIVITY.md`. If a user asks whether agent teams replace this scaffold, that is the answer.
 
+**Handing work to a separately launched session is a third case, and the harshest one.** A
+subagent reports back to its caller; a session launched on its own — cloud, remote, another
+machine — takes one prompt and gives back nothing anyone can read, so the whole task has to fit
+in that prompt and the result has to land in git or another durable place to exist at all.
+`CHARTER.md §8` states the boundary with the measurements behind it, and
+`coordination/LAUNCH_PROMPTS.md` carries the prompt shape and the one-approval rule for
+outward-facing work. Both ship with the scaffold, so a project has them without reading this
+file — but mention them when you explain the setup, because the failure they prevent is silent.
+
 ### 6. Optional: git/GitHub rails
 
 Not part of the interview above, and not something to set up by default — only reach for it when
@@ -214,8 +223,9 @@ skill's templates — their setup has presumably diverged for reasons specific t
   layout.
 - `references/upstream-feedback.md` — how to report a defect in the scaffold itself back to this
   skill instead of only patching it locally: distinguishing scaffold bugs from project-specific
-  drift, marking a local patch until it's accepted upstream, and the report shape that has
-  actually gotten fixes merged.
+  drift, marking a local patch until it's accepted upstream, the report shape that has actually
+  gotten fixes merged, and (§6) what to do when the project and the skill sit under different
+  accounts, which blocks filing anything from the session that found the defect.
 - `references/git-github-rails.md` — optional server-side layer (CODEOWNERS, CI checks, when to
   use a real PR instead of a `HANDOFFS.md` entry) for a project that's outgrown pure client-side
   enforcement. Read only when step 5 above applies.

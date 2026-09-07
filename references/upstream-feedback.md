@@ -73,3 +73,42 @@ makes the local one redundant, and a dead patch left in place is exactly the kin
 `references/rationale.md` warns about: two things describing the same fact, only one of which is
 still true. If the local patch predates the marker convention above, add the marker first so its
 removal is a deliberate, greppable step rather than something that has to be remembered.
+
+## 6. When the project and the skill live under different accounts
+
+§3 reads as though the session that found the defect can file the report. Often it cannot, and
+the reason is structural rather than a permission someone can grant — worth knowing before you
+plan the work, because it is the most likely arrangement: the project belongs to whoever adopted
+the scaffold, the skill belongs to whoever wrote it.
+
+Reading and writing come from different places on a hosted harness. A public repository is
+readable with no attachment at all — the session's git proxy serves an anonymous clone or fetch,
+which is enough to survey the code, the issues and the PRs. Writing anything goes through the
+platform API instead, and that needs the repository genuinely attached to the session. Attaching
+it is what fails:
+
+```
+add_repo: cross-tier adds are not supported in v1: requested
+"<owner-b>/<skill-repo>" but session already has repos from owner(s) [<owner-a>]. Start a
+new session with the requested repo as the initial source, or add a repo from the same
+owner as the existing sources
+```
+
+So a session working on a project under one account can read the skill's repository in full and
+still be unable to file a single Issue against it. The channel is not broken; it costs three
+steps that "just open an Issue" does not suggest:
+
+1. **Draft the report where the evidence is** — in the session that hit the defect. It is the
+   only one that can quote the actual error, the actual numbers, and the actual sequence, and §3
+   is mostly a demand for exactly those.
+2. **Launch a relay session whose *initial source* is the skill's repository.** Initial, not
+   added afterwards: attaching later is precisely what does not work, so this cannot be
+   retrofitted onto the session already running. Hand it the finished text in its opening
+   prompt, because that prompt is the only input it will ever get (`CHARTER.md §8`).
+3. **Be present for one approval.** Filing an Issue is an outward-facing action, so the relay
+   session parks until a human opens it once — see the launched-session rules in
+   `assets/coordination/LAUNCH_PROMPTS.md`. One approval releases the whole batch.
+
+None of that is a reason to skip reporting; it is a reason to **batch**. The cost is per relay
+session, not per finding, so collect several findings, then spend one relay session and one
+approval on all of them together.
