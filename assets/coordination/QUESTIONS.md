@@ -30,10 +30,15 @@ a sign it belongs in `ACTIVITY.md` instead, not a reason to invent a new QUESTIO
 
 ## Example batch — replace with your project's first real batch
 
+The example rows are numbered `EX-*` on purpose, so that your first real question can be `Q-1`
+whether or not you delete this section first. Two rows sharing an id is not cosmetic: `INDEX.md`
+exists so a reader can jump to an item by number, and an id resolving to two different rows
+defeats that for the one number a new project reaches for soonest.
+
 | # | Question | Owner's answer | Type | Status |
 |---|---|---|---|---|
-| Q-1 | *(example)* Should X or Y? | *(owner's actual answer, verbatim)* | blocking | resolved |
-| Q-2 | *(example)* Non-blocking question with a default | Took default `<D>` because `<reason>` | non-blocking | resolved |
+| EX-1 | *(example)* Should X or Y? | *(owner's actual answer, verbatim)* | blocking | resolved |
+| EX-2 | *(example)* Non-blocking question with a default | Took default `<D>` because `<reason>` | non-blocking | resolved |
 
 ### Follow-ups a resolved question implies
 
