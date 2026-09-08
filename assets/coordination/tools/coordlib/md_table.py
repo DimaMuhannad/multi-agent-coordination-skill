@@ -203,8 +203,8 @@ def scan_control_characters(text: str):
     escape-interpreting writer:
       - a C0 control byte such as the 0x07 that `\\a` in `\\assets` became;
       - a bare CR inside a line, which `\\r` in `\\references` became. That one splits the
-        line for every reader, shifting every following line number by one -- and those
-        line numbers are what the mutator writes to.
+        line for every reader, shifting every following line number by one -- so every
+        diagnostic and every INDEX.md jump target after it points at the wrong row.
     """
     for number, line in enumerate(text.split("\n"), start=1):
         body = line[:-1] if line.endswith("\r") else line

@@ -5,7 +5,7 @@ Ships with the CORE scaffold. build_index.py and kpi_git.py depend on it; the op
 Streamlit dashboard depends on it too. The dependency runs one way only:
 
     coordlib  <--  build_index.py, kpi_git.py         (core, stdlib only)
-    coordlib  <--  dashboard/parser.py, mutator.py    (optional add-on, still stdlib)
+    coordlib  <--  dashboard/parser.py                 (optional add-on, still stdlib)
     coordlib  <--  dashboard/badges.py  <--  components.py, dashboard.py   (needs streamlit)
 
 coordlib must never import from dashboard/, and nothing outside dashboard/ may import
@@ -82,7 +82,6 @@ __all__ = [
     "split_table_row",
     "escape_pipe",
     "format_row",
-    "format_table_row",
     "is_separator_row",
     "detect_line_ending",
     "iter_table_blocks",
@@ -111,7 +110,3 @@ __all__ = [
     "worktrees_dir",
     "is_within",
 ]
-
-#: Alias kept because dashboard/mutator.py exports a function of this name that callers and
-#: tests import directly.
-format_table_row = format_row

@@ -211,7 +211,8 @@ def resolve_headers(cells: Sequence[str]):
 
 
 #: Minimum canonical columns a table must expose to be treated as that kind of table.
-#: `append_question` uses this to pick its destination instead of "last table in the file".
+#: A table qualifies by header signature, not by position, so a measurements table sitting
+#: in QUESTIONS.md is reported rather than read as questions.
 QUESTIONS_TABLE_SIGNATURE = frozenset({"id", "question", "status"})
 BOARD_TABLE_SIGNATURE = frozenset({"role", "status"})
 OWNERSHIP_TABLE_SIGNATURE = frozenset({"path", "owner"})

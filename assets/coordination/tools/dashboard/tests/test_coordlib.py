@@ -246,7 +246,8 @@ def test_scan_detects_the_handoffs_corruption_signature():
     """`\\a` in `\\assets` became 0x07 and `\\r` in `\\references` became a bare CR.
 
     The CR is the damaging one: it splits the line for every reader, so every later line
-    number is off by one -- and those line numbers are the mutator's write target.
+    number is off by one -- and a line number is what a diagnostic and an INDEX.md entry
+    both hand a human to jump to.
     """
     text = "- What: Create \x07ssets/x and update \references/y\n"
     findings = list(md_table.scan_control_characters(text))
@@ -318,3 +319,19 @@ def test_shipped_templates_have_consistent_line_endings():
         if crlf and lf:
             problems.append(f"{path.name}: {crlf} CRLF and {lf} LF lines")
     assert problems == [], "; ".join(problems)
+
+
+def test_wide_table_with_empty_cells_round_trips():
+    """Empty, whitespace-only and many columns survive tokenize -> format -> tokenize.
+
+    Moved here from the adversarial stress suite when the dashboard's write path was
+    removed. It had already been retargeted once, away from driving the mutator and onto
+    the tokenizer; this is where the property it checks actually lives, and md_table's
+    writer half now has no shipped caller left to reach it through.
+    """
+    row = "| K1 |   | val3 | | val5 |   val6   | | val8 |"
+    cells = md_table.split_table_row(row)
+    assert cells == ["K1", "", "val3", "", "val5", "val6", "", "val8"]
+
+    rendered = md_table.format_row(cells)
+    assert md_table.split_table_row(rendered.strip()) == cells
