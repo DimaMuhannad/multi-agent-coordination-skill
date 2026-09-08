@@ -489,20 +489,22 @@ sorts every file into one bucket:
 | `seed-changed` | a template you filled in has moved upstream; compare and port what applies |
 | `local-only` | yours alone. Listed so you can see your customisations, never a problem |
 
-Exit 0 when nothing needs a person, 1 when a row needs one — usable as a CI gate. Which rows
-count depends on when the project's baseline was written, and the reason is worth a sentence:
+Exit 0 when nothing needs a person, 1 when a row needs one — usable as a CI gate. One rule,
+the same in every project: **red means a `both` row.** Adding `--strict` also fails on
+`upstream-only-but-customized`.
 
-- A baseline written by **this version or newer** gates on `both` **and**
-  `upstream-only-but-customized`. The risk is the same in both — a hand-written file that
-  upstream has also moved — and a project starting out with the distinction never had a
-  different promise.
-- A baseline written **before this distinction existed** gates on `both` alone. Nothing about
-  such a project changed when the tool learned a new category, and an upgrade channel that
-  turns someone's CI red for standing still is one they will stop running.
+That second category carries the same risk as a `both` row — a hand-written file that
+upstream has also moved — so a project that wants its build to stop on those should pass
+`--strict`, in the CI step, where the next person to read the workflow can see it. The report
+says which way it went whenever a customised row is present, so a red build can explain
+itself. `--strict` cannot hide a `both` row; nothing can.
 
-`--strict` gates on both categories regardless of baseline; `--no-strict` gates on `both`
-alone. Neither can hide a `both` row. The report says which way it went whenever a customised
-row is present, so a red build can explain itself.
+The flag briefly worked differently here than on the scaffold's other tools: it was
+three-state, and its default was read out of the stamp's `format` version, so the same drift
+could exit 0 in one project and 1 in another. That bought backward compatibility for
+baselines written before the category existed, at the price of an exit code decided by a JSON
+field nobody reads. Passing `--strict` in the CI file is backward compatible for every
+project and visible to anyone.
 
 **It reports; it does not merge.** A three-way auto-merge of markdown that people have
 edited cannot be done without lying about the result, and a wrong merge of `CHARTER.md` is
@@ -545,6 +547,6 @@ python3 coordination/tools/upgrade.py --from <skill>/assets              # upstr
 The first two catch a file and its source of truth drifting apart. The third catches the
 project drifting from upstream. None of them writes anything.
 
-If the project adopted the scaffold before `upstream-only-but-customized` existed and you
-*want* that row to fail the build too, add `--strict` to the third line — see §10 for what
-each baseline gates on by default.
+If you *want* an `upstream-only-but-customized` row to fail the build too — a file that was
+already the project's own when the baseline was frozen, and that upstream has since moved —
+add `--strict` to the third line. See §10.

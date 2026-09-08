@@ -408,61 +408,68 @@ def _customise_and_move_upstream(adopted_project, upstream):
     return str(adopted_project / "coordination")
 
 
-def test_an_old_baseline_keeps_the_exit_code_it_was_promised(adopted_project, upstream, capsys):
-    """A version-1 stamp predates the category, so it must not start failing builds.
+def test_the_customised_category_does_not_fail_a_build_by_default(adopted_project, upstream, capsys):
+    """One rule everywhere: red means a `both` row unless the caller asked for more.
 
-    Nothing about such a project changed -- only the tool's vocabulary did. Turning its CI
-    red for that would be the upgrade channel punishing a project for standing still.
+    The customised-before-adoption category is a warning by default. It carries the same
+    risk as a `both` row, but making it fail a build is a decision each project takes in its
+    CI step rather than one the tool takes on the project's behalf.
     """
     coordination = _customise_and_move_upstream(adopted_project, upstream)
-    stamp = manifest.read_stamp(adopted_project / "coordination")
-    stamp["format"] = 1
-    manifest.write_stamp(adopted_project / "coordination", stamp)
     assert upgrade_cli.main(["--from", str(upstream), "--coordination-dir", coordination]) == 0
     assert "do not affect the exit code" in capsys.readouterr().out
 
 
-def test_an_old_baseline_can_opt_in_with_strict(adopted_project, upstream, capsys):
+def test_strict_gates_on_the_customised_category(adopted_project, upstream, capsys):
     coordination = _customise_and_move_upstream(adopted_project, upstream)
-    stamp = manifest.read_stamp(adopted_project / "coordination")
-    stamp["format"] = 1
-    manifest.write_stamp(adopted_project / "coordination", stamp)
     assert upgrade_cli.main(
         ["--from", str(upstream), "--coordination-dir", coordination, "--strict"]) == 1
     assert "FAIL the exit code" in capsys.readouterr().out
 
 
-def test_a_new_baseline_gates_on_the_customised_category_by_default(adopted_project, upstream):
-    """A baseline written by a tool that knows the category starts out gating on it: the risk
-    is the same as a `both` row, and this project never had a different promise."""
+def test_the_exit_code_does_not_depend_on_the_stamp_version(adopted_project, upstream):
+    """The same drift must exit the same way in every project.
+
+    It briefly did not: the default was read out of the stamp's `format` field, so a
+    baseline written by a newer tool gated on the new category and an older one did not.
+    That kept an existing project's CI meaning intact, at the price of an exit code that
+    depended on a JSON field nobody reads, and of `--strict` meaning something different
+    here than on `build_index.py` and `check_rules.py`, where it is an ordinary flag.
+    """
     coordination = _customise_and_move_upstream(adopted_project, upstream)
-    assert manifest.read_stamp(adopted_project / "coordination")["format"] >= 2
-    assert upgrade_cli.main(["--from", str(upstream), "--coordination-dir", coordination]) == 1
+    stamp_path = adopted_project / "coordination"
+
+    for version in (1, 2):
+        stamp = manifest.read_stamp(stamp_path)
+        stamp["format"] = version
+        manifest.write_stamp(stamp_path, stamp)
+
+        assert upgrade_cli.main(
+            ["--from", str(upstream), "--coordination-dir", coordination]) == 0, version
+        assert upgrade_cli.main(
+            ["--from", str(upstream), "--coordination-dir", coordination, "--strict"]) == 1, version
 
 
-def test_a_new_baseline_can_opt_out_with_no_strict(adopted_project, upstream):
-    coordination = _customise_and_move_upstream(adopted_project, upstream)
-    assert upgrade_cli.main(
-        ["--from", str(upstream), "--coordination-dir", coordination, "--no-strict"]) == 0
-
-
-def test_no_strict_never_hides_a_both_row(project, upstream):
-    """--no-strict relaxes only the new category. The original gate is not negotiable."""
+def test_the_default_never_hides_a_both_row(project, upstream):
+    """The relaxed default relaxes only the new category. The original gate is not negotiable."""
     target = "coordination/tools/coordlib/schema.py"
     for tree, note in ((project, "# mine\n"), (upstream, "# theirs\n")):
         with open(tree / target, "a", encoding="utf-8") as fh:
             fh.write(note)
-    assert upgrade_cli.main(["--from", str(upstream), "--no-strict",
+    assert upgrade_cli.main(["--from", str(upstream),
                              "--coordination-dir", str(project / "coordination")]) == 1
 
 
 def test_json_reports_which_gate_was_applied(adopted_project, upstream, capsys):
     """A CI run that goes red should be able to say why without re-deriving the rule."""
     coordination = _customise_and_move_upstream(adopted_project, upstream)
+
     upgrade_cli.main(["--from", str(upstream), "--coordination-dir", coordination, "--json"])
-    payload = json.loads(capsys.readouterr().out)
-    assert payload["strict"] is True
-    assert payload["stamp"]["format"] >= 2
+    assert json.loads(capsys.readouterr().out)["strict"] is False
+
+    upgrade_cli.main(["--from", str(upstream), "--coordination-dir", coordination,
+                      "--json", "--strict"])
+    assert json.loads(capsys.readouterr().out)["strict"] is True
 
 
 def test_cli_without_a_stamp_says_run_adopt(tmp_path, upstream, capsys):
