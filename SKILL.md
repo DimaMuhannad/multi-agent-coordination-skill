@@ -180,19 +180,22 @@ principle as step 3: don't pre-install this speculatively.
 ### 7. Optional: the Streamlit dashboard
 
 Same rule as the rails: not part of the interview, not installed by default. It is the only
-piece of the scaffold that needs a third-party dependency, and the only one that **writes** to
-the journals. Reach for it when a human wants to see project state without reading four files,
-and say plainly what it does and does not do:
+piece of the scaffold that needs a third-party dependency. Reach for it when a human wants to
+see project state without reading four files, and say plainly what it is:
 
-- read-only by default; writing requires `COORDINATION_DASHBOARD_WRITES=1` for that session;
-- every write is previewed as a diff, names its destination table, and is confirmed by a human;
-- it refuses to write to any file whose schema it could not read;
-- git remains the arbiter — each write is a commit with `CHARTER.md §4` trailers.
+- **it reads; it does not write.** Editing a journal is git's job, and git is what every role
+  already uses. `docs/ru/CONCEPT.md §6.5`'s invariant — "the interface is a read-only projection
+  over git" — now holds literally, with no conditions attached;
+- it needs `streamlit`, so a project that does not want a Python service should skip it;
+- `build_index.py` answers the same "what is still open" question with no dependency at all,
+  and is what the CI check and the scheduled index rebuild use.
 
-Those four conditions are what keep it compatible with `docs/ru/CONCEPT.md §6.5`'s invariant
-("the interface is a read-only projection over git") rather than a second source of truth; they
-are written up as §6.6 there. If a project only wants the read-only view, `build_index.py` gives
-it with no dependencies at all.
+It did carry a browser-side editor once, behind four conditions written up in `CONCEPT.md §6.6`.
+That half was removed in September 2026, not because a condition broke but because a field
+measurement found it unused: two installed projects, 47 commits touching the journals, none
+through the dashboard, and neither owner had ever launched it. §6.6 records the whole finding.
+Mention this only if someone asks why the tool is read-only — a new project does not need the
+history.
 
 ## Found a bug in the scaffold itself, not just this project's setup
 

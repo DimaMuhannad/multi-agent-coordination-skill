@@ -75,7 +75,7 @@ coordination/
     coordlib/        (shared, stdlib-only: vocabulary, table tokenizer, diagnostics,
                       ownership, install manifest)
   .scaffold-version  (written at install by `upgrade.py --adopt` — see §10)
-    dashboard/       (OPTIONAL add-on — needs streamlit; see §7)
+    dashboard/       (OPTIONAL add-on, read-only — needs streamlit; see §7)
 .claude/
   hooks/
     check-context-budget.py
@@ -342,16 +342,13 @@ pip install -r coordination/tools/dashboard/requirements.txt
 streamlit run coordination/tools/dashboard/dashboard.py
 ```
 
-It opens **read-only**. Writing is opt-in and off by default:
+**It reads and does not write.** There is no write mode to enable: `docs/ru/CONCEPT.md` §6.5's
+invariant — the interface is a read-only projection over git — holds literally. Editing a
+journal is git's job. The browser-side editor that used to live here, and the four conditions
+that justified it, are recorded in §6.6 along with the measurement that retired it.
 
-```bash
-COORDINATION_DASHBOARD_WRITES=1 streamlit run coordination/tools/dashboard/dashboard.py
-```
-
-That default is not timidity — `docs/ru/CONCEPT.md` §6.5 states the invariant that the
-interface is a read-only projection over git, and §6.6 lists the four conditions under which
-writing does not violate it. Skip the dashboard entirely if the project doesn't want a Python
-service; `build_index.py` covers the same status question with no dependencies at all.
+Skip the dashboard entirely if the project doesn't want a Python service; `build_index.py`
+covers the same status question with no dependencies at all.
 
 ## 8. Protocol tokens stay English
 
@@ -362,8 +359,8 @@ answers, summaries and handoff prose go in the project's own language — that h
 parsed by anything.
 
 The tools do **not** guess at a translation. A word outside the documented vocabulary is
-reported as unrecognised and counted in neither total, and the file carrying it is marked
-read-only in the dashboard. The alternative — accepting a Russian `открыт` as "open" — was
+reported as unrecognised and counted in neither total, and the dashboard shows it as
+unclassified rather than as a documented state. The alternative — accepting a Russian `открыт` as "open" — was
 tried and is exactly how a journal reported "Open Questions: 0" and was believed; see
 `references/rationale.md`.
 
