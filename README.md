@@ -65,11 +65,12 @@ problem it solves.
 
 - **git/GitHub rails** (`assets/dot-github/`) — CODEOWNERS, CI checks. See
   [`references/git-github-rails.md`](references/git-github-rails.md).
-- **`coordination/tools/dashboard/`** — a Streamlit dashboard over the journals. It is the only
-  piece here that requires a third-party dependency, and the only one that **writes**. It is
-  read-only by default; writing is enabled per session with
-  `COORDINATION_DASHBOARD_WRITES=1`, and every write is previewed as a diff and confirmed
-  before it is saved. The core scaffold stays markdown plus stdlib Python.
+- **`coordination/tools/dashboard/`** — a Streamlit **read-only** view of the journals, and the
+  only piece here that requires a third-party dependency. It shows the roles board, the decision
+  queue, handoffs and worktrees on one screen; editing stays in git, where every role already
+  works. It used to write as well, behind a diff-and-confirm step and an opt-in environment
+  variable; that half was removed once field data showed nobody had ever used it. For the same
+  view with no dependency at all, `build_index.py` writes `INDEX.md`.
 
 ## Using it
 

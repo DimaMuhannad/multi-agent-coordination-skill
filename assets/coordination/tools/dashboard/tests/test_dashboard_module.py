@@ -51,9 +51,16 @@ def test_dashboard_imports_with_streamlit_present(stub_streamlit):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    assert hasattr(module, "request_write")
-    assert hasattr(module, "render_pending_write")
     assert hasattr(module, "render_diagnostics")
+    assert hasattr(module, "discover_coordination_dir")
+
+    # The write path is gone, and these names are how it would grow back: a stager, a
+    # confirm step, and the commit helper they fed. Absence is the property under test.
+    for removed in ("request_write", "render_pending_write", "handle_mutation_and_commit",
+                    "rebuild_index_file"):
+        assert not hasattr(module, removed), (
+            "%s is back; this module reads and does not write" % removed
+        )
 
 
 def test_the_sidebar_is_gone():
@@ -66,23 +73,34 @@ def test_the_sidebar_is_gone():
     assert "st.sidebar" not in code
 
 
-def test_git_commit_defaults_to_off():
-    toggle = re.search(r'st\.toggle\(\s*"⚡ Commit changes to git",\s*value=(\w+)', SOURCE)
-    assert toggle is not None, "the git toggle must exist in the main column"
-    assert toggle.group(1) == "False"
+def test_there_is_no_git_commit_control():
+    """There is nothing to commit from here, so there is no toggle to get wrong.
+
+    The toggle this replaces was the issue #6 finding twice over: it lived in a sidebar that
+    some Streamlit versions do not render, and it defaulted to on. Both problems are solved
+    by the control not existing.
+    """
+    code = re.sub(r"#.*", "", SOURCE)
+    assert "Commit changes to git" not in code
+    assert "COORDINATION_DASHBOARD_WRITES" not in code
 
 
-def test_every_write_button_is_gated_on_the_read_only_flag():
-    """The outer of two gates; request_write() checks again before staging anything."""
-    write_keys = re.findall(r'key=f?"(btn_[a-z_]+)[^"]*"([^)]*)', SOURCE)
-    ungated = [
-        key for key, tail in write_keys
-        if key not in ("btn_rebuild_index",) or "disabled" not in tail
-    ]
-    for key, tail in write_keys:
-        if key.startswith("btn_") and "disabled=not writes_on" not in tail:
-            pytest.fail(f"{key} is not gated on writes_on")
-    assert write_keys, "expected to find write buttons"
+def test_nothing_here_opens_a_file_for_writing():
+    """A read-only view is checkable, and a gated writer is not the same thing.
+
+    The previous version of this test asserted every write button carried
+    `disabled=not writes_on` -- a real check, but one that assumes the buttons exist and
+    only asks whether they are gated. There is no gate to audit now: the module opens no
+    file for writing and runs no git subprocess.
+    """
+    code = re.sub(r"#.*", "", SOURCE)
+    for writer in ('open(', 'write_text', 'subprocess'):
+        if writer == 'open(':
+            for match in re.findall(r'open\([^)]*', code):
+                assert '"r"' in match or "mode=" not in match, match
+                assert '"w"' not in match and "'w'" not in match, match
+        else:
+            assert writer not in code, "%s has no place in a read-only view" % writer
 
 
 def test_the_hardcoded_role_roster_is_gone():
@@ -95,9 +113,18 @@ def test_the_worktree_cd_hint_is_not_hardcoded():
     assert "cd assets/.worktrees/" not in SOURCE
 
 
-def test_index_is_generated_by_the_core_tool_not_a_second_implementation():
-    """Two generators wrote the same filename in different formats."""
-    assert "build_index.build_index_text" in SOURCE
+def test_index_is_not_generated_here_at_all():
+    """Two generators once wrote the same filename in different formats.
+
+    That was settled by routing this module through `build_index.build_index_text`. It is
+    settled harder now: the module reads INDEX.md if it is there and otherwise names the
+    command that builds it, so there is no second implementation and no second writer.
+    """
     assert "## QUESTIONS.md — open" not in SOURCE, (
         "dashboard.py must not render INDEX.md sections itself"
+    )
+    code = re.sub(r"#.*", "", SOURCE)
+    assert "import build_index" not in code
+    assert "build_index_text" not in code, (
+        "the generator is a CLI the reader runs, not an import this module calls"
     )
