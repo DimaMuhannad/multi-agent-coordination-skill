@@ -75,7 +75,8 @@ coordination/
     coordlib/        (shared, stdlib-only: vocabulary, table tokenizer, diagnostics,
                       ownership, install manifest)
   .scaffold-version  (written at install by `upgrade.py --adopt` — see §10)
-    dashboard/       (OPTIONAL add-on, read-only — needs streamlit; see §7)
+    dashboard/       (OPTIONAL add-on, read-only — needs streamlit; see §7.
+                      Not installed by default)
 .claude/
   hooks/
     check-context-budget.py
@@ -335,7 +336,8 @@ Only do this once `references/git-github-rails.md` §"when this earns its place"
 
 The only part of this scaffold with a third-party dependency, and the only part that is not
 required. Everything in §1–6 is stdlib-only markdown and Python; the dashboard is an add-on in
-the same sense as the git/GitHub rails.
+the same sense as the git/GitHub rails, and like them it is **not installed by default** —
+copy `coordination/tools/dashboard/` in when someone actually wants the screen.
 
 ```bash
 pip install -r coordination/tools/dashboard/requirements.txt

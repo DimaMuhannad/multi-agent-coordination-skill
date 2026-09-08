@@ -92,9 +92,12 @@ follow it rather than improvising the layout, since later templates reference ea
 exact path. In short: copy everything under this skill's `assets/` into the target project
 (dropping the `.template` suffix where present, and `dot-claude/` becomes `.claude/`), then fill
 in the placeholders (`<PROJECT NAME>`, `<ID>`, `<LANGUAGE>`, role tables, zone descriptions) from
-the interview — one `roles/<ID>.md` per role the user named. Two files that layout marks
-optional are **not** installed now: `prompts/REVIEW.md` and `kpi_config.json`. Both answer a
-problem a new project has not had yet, and both are cheap to add the day it does. Wire the
+the interview — one `roles/<ID>.md` per role the user named. Three things that layout marks
+optional are **not** installed now: `prompts/REVIEW.md`, `kpi_config.json`, and the whole
+`tools/dashboard/` directory. Each answers a problem a new project has not had yet, and each is
+cheap to add the day it does. The dashboard is the one worth naming out loud rather than
+quietly skipping: it is the scaffold's only third-party dependency, and a project that received
+it silently had an owner who did not know it was there. Wire the
 `SessionStart` hook into `.claude/settings.json` per `references/setup.md §2`, and verify it
 actually fires before calling the setup done.
 
