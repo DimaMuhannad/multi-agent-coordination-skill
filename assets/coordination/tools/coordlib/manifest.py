@@ -34,11 +34,13 @@ STAMP_NAME = ".scaffold-version"
 #: which is the same question asked of the same field.
 #:
 #: Version 2 adds no keys and stays readable by a version-1 tool. It marks a stamp written by
-#: a tool that tells `upstream-only-but-customized` apart from `upstream-only`, which lets
-#: `upgrade.py` gate on that category by default. A version-1 stamp predates the distinction
-#: and is never gated on it unless `--strict` is passed: that project's CI was promised a
-#: specific meaning for a red build, and a project that has not changed must not turn red
-#: because the tool learned to see something new.
+#: a tool that tells `upstream-only-but-customized` apart from `upstream-only`.
+#:
+#: Nothing branches on it. `upgrade.py` did for one day -- it read this field to decide
+#: whether that category should fail a build -- which made the same drift exit differently in
+#: two projects for a reason visible only inside a JSON file. The gate is now one rule plus
+#: `--strict`, and this stays a record of which era wrote a stamp rather than an input to
+#: behaviour. Read it when you need to know what a baseline could see; do not gate on it.
 FORMAT_VERSION = 2
 
 #: Never part of the scaffold: build artifacts, caches, and anything git already ignores by

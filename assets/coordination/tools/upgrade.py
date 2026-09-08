@@ -183,7 +183,7 @@ _EXPLANATIONS = (
 )
 
 
-def render(rows, stamp, upstream_ref="", strict=None):
+def render(rows, stamp, upstream_ref="", strict=False):
     grouped = group(rows)
     lines = []
 
@@ -197,12 +197,12 @@ def render(rows, stamp, upstream_ref="", strict=None):
         lines.append("  ! baseline was ADOPTED from files already on disk: what any")
         lines.append("    pre-adoption edits changed is invisible to this comparison, though")
         lines.append("    a file that already differed is marked customised, not pristine")
-    if strict is not None and grouped.get(UPSTREAM_ONLY_BUT_CUSTOMIZED):
+    if grouped.get(UPSTREAM_ONLY_BUT_CUSTOMIZED):
         # Whether these rows fail a build is a real difference in behaviour, and the reader
         # deciding what to do with them is exactly who needs to know which way it went.
-        lines.append("  customised-before-adoption rows %s the exit code (%s)"
+        lines.append("  customised-before-adoption rows %s the exit code%s"
                      % ("FAIL" if strict else "do not affect",
-                        "--no-strict to change" if strict else "--strict to change"))
+                        "" if strict else " (--strict to change)"))
     lines.append("")
 
     actionable = 0
@@ -278,15 +278,12 @@ def main(argv=None):
                         help="write a baseline from the files currently on disk, for a "
                              "project installed before stamping existed")
     parser.add_argument("--json", action="store_true")
-    # Three states, and the default is deliberately not a constant: None means "ask the
-    # stamp". See the strict resolution below and manifest.FORMAT_VERSION for why the answer
-    # depends on which era of the tool wrote the baseline.
-    parser.add_argument("--strict", dest="strict", action="store_true", default=None,
+    # An ordinary boolean, like --strict on build_index.py and check_rules.py. It used to be
+    # three-state, with the default read out of the stamp's format version, so the same drift
+    # in two projects could exit differently and neither invocation said which rule applied.
+    parser.add_argument("--strict", action="store_true",
                         help="also exit 1 when a file customised before adoption has moved "
-                             "upstream (the default for a baseline written by this version "
-                             "of the tool or newer)")
-    parser.add_argument("--no-strict", dest="strict", action="store_false",
-                        help="exit 1 only on a `both` row, whatever the baseline says")
+                             "upstream (default: exit 1 only on a `both` row)")
     args = parser.parse_args(argv)
 
     upstream_dir = Path(args.upstream)
@@ -341,28 +338,24 @@ def main(argv=None):
     upstream = hash_upstream(upstream_dir)
     rows = compare(stamp, project_root_for(coordination), upstream)
 
-    # A customised-before-adoption row carries the same risk as a `both` row -- a hand-written
-    # file that upstream has also moved -- so gating on it is right for a project that starts
-    # out knowing the category exists. It is NOT right to impose retroactively: a baseline
-    # written before this distinction existed belongs to a project whose CI was promised that
-    # red means `both`, and a project that has not changed must not go red because the tool
-    # learned to see something new. The stamp records which era wrote it, so neither case has
-    # to be guessed; `--strict` / `--no-strict` override the answer either way.
-    strict = args.strict
-    if strict is None:
-        strict = stamp.get("format", 1) >= 2
-
+    # One rule, the same in every project: red means a `both` row unless the caller asked for
+    # more. A customised-before-adoption row carries the same risk -- a hand-written file that
+    # upstream has also moved -- and a project that wants its build to stop on those writes
+    # --strict in the CI step, where the next reader can see it. The alternative, deciding
+    # from the stamp's format version, kept an existing project's CI meaning intact but made
+    # the exit code depend on a JSON field nobody reads; --strict in a CI file is backward
+    # compatible for everyone and visible to anyone.
     if args.json:
         print(json.dumps({"stamp": {k: stamp.get(k) for k in
                                     ("source_commit", "source_ref", "installed_at", "adopted",
                                      "format")},
                           "upstream": str(upstream_dir),
-                          "strict": strict,
+                          "strict": args.strict,
                           "rows": rows}, indent=2, ensure_ascii=False))
     else:
-        print(render(rows, stamp, upstream_ref=str(upstream_dir), strict=strict))
+        print(render(rows, stamp, upstream_ref=str(upstream_dir), strict=args.strict))
 
-    gating = (BOTH, UPSTREAM_ONLY_BUT_CUSTOMIZED) if strict else (BOTH,)
+    gating = (BOTH, UPSTREAM_ONLY_BUT_CUSTOMIZED) if args.strict else (BOTH,)
     return 1 if any(row["category"] in gating for row in rows) else 0
 
 
