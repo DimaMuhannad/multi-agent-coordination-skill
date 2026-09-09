@@ -130,42 +130,101 @@ def test_every_shipped_writer_pins_the_line_ending():
 _COORDLIB = _ASSETS_DIR / "coordination" / "tools" / "coordlib"
 _CONTRACT = _ASSETS_DIR.parent / "references" / "extension-contract.md"
 
-#: The only two modules an external extension may depend on. Everything else in coordlib is
-#: free to change. Kept here rather than derived, so widening the promise is a visible edit.
+#: Modules an external extension may depend on in full. Kept here rather than derived, so
+#: widening the promise is a visible edit.
 PROMISED_MODULES = {"schema", "diagnostics"}
+
+#: Modules that are internal EXCEPT for named functions. `md_table` is here because §4 of the
+#: contract makes these three normative for reading a row and there is no other tokenizer --
+#: marking the whole module internal left an outside reader no legal way to read a table
+#: (issue #50). Everything else in such a module stays free to change.
+PROMISED_FUNCTIONS = {
+    "md_table": {"split_table_row", "unescape_pipe", "iter_table_blocks"},
+}
+
+
+def _stability_line(name):
+    text = _read(_COORDLIB / ("%s.py" % name))
+    marks = [line for line in text.splitlines() if line.startswith("STABILITY:")]
+    assert len(marks) == 1, "%s.py has %d STABILITY lines" % (name, len(marks))
+    return marks[0]
 
 
 def test_every_coordlib_module_declares_its_stability():
     """A vendored copy travels without references/, so the promise has to be in the code.
 
-    The contract file states which modules are promised; the docstrings state the same thing
-    where an outside reader will actually meet it. Two statements of one fact is what this
-    project's own rationale warns about -- so they are checked against each other rather than
-    kept in sync by hand.
+    The contract file states what is promised; the docstrings state the same thing where an
+    outside reader will actually meet it. Two statements of one fact is what this project's own
+    rationale warns about -- so they are checked against each other rather than kept in sync by
+    hand.
+
+    Three markers, because two were not enough to describe the truth: PROMISED, INTERNAL, and
+    PARTIAL for a module whose named functions are promised while the rest of it is not.
     """
     modules = sorted(path.stem for path in _COORDLIB.glob("*.py")
                      if path.stem != "__init__")
     assert modules, "no coordlib modules found at %s" % _COORDLIB
 
-    promised, internal = set(), set()
+    promised, partial, internal = set(), set(), set()
     for name in modules:
-        text = _read(_COORDLIB / ("%s.py" % name))
-        marks = [line for line in text.splitlines() if line.startswith("STABILITY:")]
-        assert len(marks) == 1, "%s.py has %d STABILITY lines" % (name, len(marks))
-        (promised if "PROMISED" in marks[0] else internal).add(name)
+        mark = _stability_line(name)
+        if mark.startswith("STABILITY: PARTIAL"):
+            partial.add(name)
+        elif "PROMISED" in mark:
+            promised.add(name)
+        else:
+            internal.add(name)
 
     assert promised == PROMISED_MODULES, (
         "the promised set changed: %s. Widening it freezes a surface -- update the table in "
         "references/extension-contract.md and this test together, deliberately."
         % sorted(promised)
     )
-    assert internal == set(modules) - PROMISED_MODULES
+    assert partial == set(PROMISED_FUNCTIONS), sorted(partial)
+    assert internal == set(modules) - PROMISED_MODULES - set(PROMISED_FUNCTIONS)
+
+
+def test_a_partial_module_names_its_promised_functions_and_defines_them():
+    """The docstring must list them, and the module must actually have them.
+
+    A promise to a name that no longer exists is the worse half of this failure: the vendored
+    copy still carries the sentence, and the consumer finds out by ImportError.
+    """
+    for name, functions in PROMISED_FUNCTIONS.items():
+        mark = _stability_line(name)
+        text = _read(_COORDLIB / ("%s.py" % name))
+        for function in sorted(functions):
+            assert function in mark, (
+                "%s.py's STABILITY line does not name %s" % (name, function))
+            assert "\ndef %s(" % function in text, (
+                "%s.py promises %s and does not define it" % (name, function))
+
+
+def test_the_package_namespace_carries_only_the_promised_surface():
+    """`from coordlib import X` must not be a way to reach an internal name.
+
+    Flattening every module into one namespace was what made promised and internal
+    indistinguishable at the call site (issue #50). This is the check that keeps it flat-only
+    for things an extension may actually rely on.
+    """
+    init = _read(_COORDLIB / "__init__.py")
+    for internal_name in ("SEP_RE", "TableBlock", "format_row", "escape_pipe",
+                          "detect_line_ending", "is_separator_row", "scan_control_characters",
+                          "find_repo_root", "find_coordination_dir", "worktrees_dir",
+                          "is_within"):
+        assert '"%s"' % internal_name not in init, (
+            "%s is re-exported from coordlib/__init__.py; it is internal" % internal_name)
 
 
 def test_the_contract_names_the_modules_it_promises():
     contract = _read(_CONTRACT)
     for name in PROMISED_MODULES:
         assert "coordlib.%s" % name in contract, name
+    for name, functions in PROMISED_FUNCTIONS.items():
+        for function in sorted(functions):
+            assert function in contract, (
+                "the contract does not name %s.%s, which the module promises"
+                % (name, function))
     # And it must not quietly become the place the rules are restated: the whole point is that
     # it points at the module. A copy of the alias table here is a copy that will desync.
     assert "_COLUMN_ALIASES" not in contract

@@ -34,8 +34,29 @@ legitimate. What is not legitimate is leaving the reader to guess.
 
 ## 2. Three states, never two
 
-Every classifier in `coordlib.schema` returns `None` for *not recognised*, and never `False`.
-`False` means *understood, and it is closed*.
+`classify_item_status` returns the string `"open"`, the string `"closed"`, or `None` for *not
+recognised*. `classify_role_status` and `classify_question_type` follow the same shape: a
+canonical string, or `None`. **They never return a boolean**, and the third state is `None` —
+not `False`, not `""`.
+
+That distinction is not pedantry, and this paragraph used to get it wrong. Read as a boolean,
+the natural line to write is:
+
+```python
+counts["open" if state else "closed"] += 1     # WRONG
+```
+
+`"closed"` is a non-empty string, so every closed row lands in `open`. Nothing raises, no
+diagnostic fires, and the total is confidently wrong. The first external consumer of this
+contract wrote exactly that line, from exactly this paragraph, and only a test with an
+independently derived expected value caught it (issue #50). Compare against `None` explicitly:
+
+```python
+if state is None:
+    show_unrecognised(row)
+else:
+    counts[state] += 1
+```
 
 The obligation this places on a consumer:
 
@@ -67,6 +88,15 @@ BLOCKING section and line numbers that are all only as fresh as the last run of
 `build_index.py`; the shipped CI template has a job that fails when it has drifted, so on a
 green `main` it can be trusted and otherwise it cannot.
 
+**Where those files live is the consumer's problem, and this contract does not make it a
+promise.** The default the skill installs is `coordination/` at the repository root, and that is
+what a tool should try first — but two of the shipped tools already take a `--coordination-dir`
+flag, so an extension that hardcodes the default and offers no override will be wrong in some
+project. `coordlib.paths.find_coordination_dir` does exactly this lookup and stays INTERNAL on
+purpose: it also knows about this repository's own authoring layout, which no installed project
+has. Copy the two-line search if you want it; do not import it and do not treat this paragraph's
+silence as a guarantee that the path is fixed.
+
 The protocol tokens stay English in a project written in any language, because tooling parses
 them. The prose around them does not.
 
@@ -80,8 +110,10 @@ them. The prose around them does not.
 
 The normative definition of all of that is **`coordlib.schema`** — `resolve_headers`,
 `matches_signature`, `classify_item_status`, `classify_question_type`, `is_placeholder_text`,
-and the vocabulary tuples — together with `coordlib.md_table.split_table_row` and
-`unescape_pipe`.
+and the vocabulary tuples — together with `coordlib.md_table.split_table_row`, `unescape_pipe`
+and `iter_table_blocks`. Those three are promised (§5) precisely because this section makes them
+unavoidable: there is no second tokenizer here, so a rule that made them normative while the
+module was marked internal left no legal way to read a table at all.
 
 This document does not restate the alias table, the normalisation algorithm or the placeholder
 forms. Read them from the module. If you reimplement rather than import, that module is what
@@ -92,7 +124,8 @@ scaffold has hit most often.
 
 | Promised | May change without notice |
 |---|---|
-| `coordlib.schema` — vocabularies, classifiers, signatures, header resolution | `coordlib.md_table` tokenizer internals |
+| `coordlib.schema` — vocabularies, classifiers, signatures, header resolution | the rest of `coordlib.md_table`: `SEP_RE`, `TableBlock`'s field layout, `format_row`, `escape_pipe`, `detect_line_ending`, `is_separator_row`, `scan_control_characters` |
+| `coordlib.md_table.split_table_row`, `unescape_pipe`, `iter_table_blocks` — the three a reader cannot avoid | |
 | `coordlib.diagnostics` — the code strings, `Diagnostic`'s five fields, `UNSAFE_TO_WRITE_CODES` | `coordlib.ownership`, `coordlib.manifest`, `coordlib.paths` |
 | The on-disk shapes described in §3 and §4 | everything under `tools/dashboard/` |
 | `coordination/.scaffold-version` existing, and its `format` field | the `--json` shapes of the CLI tools |

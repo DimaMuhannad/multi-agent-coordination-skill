@@ -12,8 +12,20 @@ coordlib must never import from dashboard/, and nothing outside dashboard/ may i
 streamlit. That is enforced by test_core_tools_do_not_import_dashboard_or_streamlit, not
 merely documented -- a rule nobody checks is the failure mode the skill's references/rationale.md is
 about.
+
+**This namespace carries the promised surface only.** It used to re-export every name from all
+four modules into one flat namespace, which meant `from coordlib import split_table_row` and
+`from coordlib import classify_item_status` looked identical at the call site while only one of
+them was promised -- an outside reader had no way to tell which of their imports were
+load-bearing without opening each module. The first external consumer reported that (issue #50).
+
+So what is re-exported here is exactly what an extension may rely on. Everything else is reached
+through its module -- `from coordlib import md_table`, `coordlib.paths.find_repo_root` -- which
+is how the tools in this repository already import it, and which makes reliance on an internal
+visible in a diff.
 """
 
+# Promised: the code strings, Diagnostic's five fields, and UNSAFE_TO_WRITE_CODES.
 from .diagnostics import (
     CONTROL_CHARACTER,
     COLUMN_COUNT_MISMATCH,
@@ -30,18 +42,17 @@ from .diagnostics import (
     UNSAFE_TO_WRITE_CODES,
     record,
 )
+
+# Promised: the three functions a consumer cannot read a table without. The rest of md_table --
+# SEP_RE, TableBlock's field layout, format_row, escape_pipe, detect_line_ending,
+# is_separator_row, scan_control_characters -- is internal and is NOT re-exported here.
 from .md_table import (
-    SEP_RE,
-    TableBlock,
-    detect_line_ending,
-    escape_pipe,
-    format_row,
-    unescape_pipe,
-    is_separator_row,
     iter_table_blocks,
-    scan_control_characters,
     split_table_row,
+    unescape_pipe,
 )
+
+# Promised: the vocabularies, the classifiers, and header/signature resolution.
 from .schema import (
     BOARD_STATUSES,
     BOARD_TABLE_SIGNATURE,
@@ -61,10 +72,13 @@ from .schema import (
     split_role_status_date,
     strip_decoration,
 )
-from .paths import find_coordination_dir, find_repo_root, is_within, worktrees_dir
+
+# Deliberately NOT re-exported: coordlib.paths, coordlib.ownership, coordlib.manifest, and
+# md_table's internals. They are reached as `coordlib.<module>.<name>`, and this repository's
+# own tools already import them that way.
 
 __all__ = [
-    # diagnostics
+    # diagnostics -- promised
     "Diagnostic",
     "DiagnosticList",
     "record",
@@ -79,18 +93,11 @@ __all__ = [
     "COLUMN_COUNT_MISMATCH",
     "CONTROL_CHARACTER",
     "DUPLICATE_ID",
-    # md_table
-    "SEP_RE",
-    "TableBlock",
+    # md_table -- promised (three of them; the module itself is PARTIAL)
     "split_table_row",
-    "escape_pipe",
-    "format_row",
     "unescape_pipe",
-    "is_separator_row",
-    "detect_line_ending",
     "iter_table_blocks",
-    "scan_control_characters",
-    # schema
+    # schema -- promised
     "HANDOFF_STATUSES",
     "QUESTION_STATUSES",
     "QUESTION_TYPES",
@@ -108,9 +115,4 @@ __all__ = [
     "matches_signature",
     "QUESTIONS_TABLE_SIGNATURE",
     "BOARD_TABLE_SIGNATURE",
-    # paths
-    "find_repo_root",
-    "find_coordination_dir",
-    "worktrees_dir",
-    "is_within",
 ]
