@@ -14,9 +14,17 @@ careful version. This module keeps the careful one and both callers now share it
 of which table it belonged to, so a new question appended to whatever table happened to come
 last -- in the reporter's case a table of physical measurements, which it corrupted.
 
-STABILITY: INTERNAL. The on-disk table shape is promised; this tokenizer's internals are not. Nothing outside this package should depend on the
-names or shapes here; they may change without notice. See the skill's
-references/extension-contract.md for what IS promised.
+STABILITY: PARTIAL -- promised: split_table_row, unescape_pipe, iter_table_blocks
+
+Those three are promised because a consumer cannot avoid them. The contract's §4 makes them
+normative for reading a row, and there is no other tokenizer here -- so marking the whole module
+INTERNAL, as this docstring used to, left an outside reader with no legal way to read a table at
+all. That contradiction was found by the first external consumer (issue #50) and this is the
+half of the fix that travels with a vendored copy.
+
+Everything else in here -- SEP_RE, TableBlock's field layout, format_row, escape_pipe,
+detect_line_ending, is_separator_row, scan_control_characters, and every private helper -- stays
+INTERNAL and may change without notice. See the skill's references/extension-contract.md.
 """
 
 import re
