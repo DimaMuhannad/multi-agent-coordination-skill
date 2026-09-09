@@ -17,7 +17,7 @@ if str(_TOOLS_DIR) not in sys.path:
 
 from coordlib import diagnostics as diag  # noqa: E402
 from coordlib import md_table, schema  # noqa: E402
-from coordlib.md_table import SEP_RE, split_table_row  # noqa: E402,F401
+from coordlib.md_table import split_table_row  # noqa: E402,F401
 
 STATUS_RE = re.compile(r"\*\*Status:?\*\*:?\s*`?([^`\n().]*)", re.IGNORECASE)
 HEADER_RE = re.compile(r"^##\s+\[([^\]]+)\]\s*(?:FROM\s+(\S+)\s+TO\s+(\S+)\s*[-—–]\s*)?(.*)$", re.IGNORECASE)
