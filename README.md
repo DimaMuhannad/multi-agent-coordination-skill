@@ -31,6 +31,22 @@ into your project. All of it is distilled from a real multi-role project that ra
 for weeks and fixed the specific problems it hit along the way. Those problems — and why the fix
 looks the way it does — are written up in [`references/rationale.md`](references/rationale.md).
 
+## When not to install it
+
+The problem this solves is two sessions holding the same repository with no idea what the other
+decided. Where that isn't the situation, the scaffold is overhead and the journals become files
+nobody reads:
+
+- **One session working through a task list.** Nothing here helps it.
+- **A one-off fan-out** — several agents on independent files, finished within the hour. Reach
+  for your tool's own subagent mechanism; state that dies with the run is the right state.
+- **Work that ends before anyone forgets why.** What this buys is a decision outliving the chat
+  it was made in, and that only pays across sittings.
+
+The test is whether *"whose job is this edit?"* has a non-obvious answer in your repository. If
+it has an obvious one, don't install this. (`SKILL.md` applies the same test before setting
+anything up, and is meant to say so out loud rather than proceed.)
+
 ## What's in it
 
 - **`coordination/` templates** — role zone files, an append-only decision journal
@@ -95,6 +111,48 @@ steps if you'd rather do it by hand.
 
 Русская версия концепции (обязательный и необязательный слой, границы, human-интерфейс):
 [`docs/ru/CONCEPT.md`](docs/ru/CONCEPT.md).
+
+### What it costs
+
+Two costs, and only one of them is bounded.
+
+The bounded one is cold start. Each role session re-reads `coordination/roles/<ID>.md`, which has
+a **2,400-byte budget** and a hook that warns when it grows past it, plus whatever of
+`CHARTER.md` (about 13 KB) it needs. That is a few thousand tokens once per session start —
+noise against any current context window, and it is capped on purpose, which is the whole point
+of budgeting a file that gets re-read forever.
+
+The unbounded one is whoever coordinates. Every launch, verification and check accumulates in
+that session and is re-read every turn. Measured on the project this scaffold came from: role
+files held at 2,400 bytes each while the orchestrator's own context reached **508,093 tokens**,
+so the coordination layer cost more per turn than the work it coordinated. `CHARTER.md §10`
+makes handing over early a standing duty for exactly this reason — the handover costs one
+journal entry, because everything the next session needs is already in files.
+
+The one-time cost is human, not tokens: the setup interview, and writing one role file per role
+honestly enough to be worth re-reading.
+
+### Nothing leaves the machine
+
+No tool installed by default makes a network call. Everything reads files and `git log` in the
+local checkout, including `upgrade.py`, which compares your installation against a copy of the
+skill already on disk and therefore works offline.
+
+Both optional add-ons are worth naming, since neither is installed unless you ask. The
+git/GitHub rails put CI templates in GitHub Actions — the one place the coordination files get
+read somewhere other than your machine. The Streamlit dashboard serves a page, but a local one,
+and it reads the same files everything else reads.
+
+### Removing it
+
+`rm -rf coordination/`, delete `.claude/hooks/` and the hook entries they added to
+`.claude/settings.json`, drop the `.claude/rules/` files you took from here, and remove the
+coordination paragraphs from `AGENTS.md` / `CLAUDE.md`.
+Nothing in the project imports the tools, so nothing breaks; the journals were ordinary markdown
+all along.
+
+What was recorded stays recorded — the decisions in `QUESTIONS.md` remain in git history after
+the file is gone, which is the reason for writing them into a file in the first place.
 
 ## License
 
