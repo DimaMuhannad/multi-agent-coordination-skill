@@ -94,3 +94,30 @@ def test_no_shipped_file_points_at_the_skills_references_as_if_local():
         "shipped files cite the skill's references/ without saying so:\n  "
         + "\n  ".join(offenders)
     )
+
+
+def test_every_shipped_writer_pins_the_line_ending():
+    """A generated tree must not change shape with the platform that generated it.
+
+    `open(..., "w")` without `newline=` translates every "\n" to `os.linesep`, so on Windows
+    a generated file gains CRLF. `ownership.py` and `coordlib/manifest.py` already forced
+    "\n"; `build_index.py` and `kpi_git.py` did not, which meant INDEX.md and the KPI JSON
+    changed shape with the machine that produced them while CODEOWNERS and
+    .scaffold-version, written beside them, did not.
+
+    This is asserted over the source rather than by writing a file, because on a POSIX
+    runner the platform default IS "\n" -- a behavioural test here passes whether or not the
+    argument is present, which is how the omission survived in the first place.
+    """
+    offenders = []
+    for path in _shipped_files():
+        if path.suffix != ".py" or "/tests/" in path.as_posix():
+            continue
+        for number, line in enumerate(_read(path).splitlines(), start=1):
+            if "open(" not in line:
+                continue
+            if '"w"' not in line and "'w'" not in line:
+                continue
+            if "newline=" not in line:
+                offenders.append("%s:%d %s" % (path.name, number, line.strip()))
+    assert not offenders, "text-mode writes without an explicit newline=: %s" % offenders

@@ -311,7 +311,11 @@ def main():
     diagnostics = []
     text, q_count, h_count, blocking = build_index_text(coord_dir, diagnostics)
 
-    with open(args.out, "w", encoding="utf-8") as fh:
+    # newline="\n" for the same reason ownership.py and coordlib/manifest.py force it: the
+    # generated tree should not change shape with the platform that generated it. Without
+    # it this file alone gained CRLF on Windows while CODEOWNERS and .scaffold-version,
+    # written beside it, stayed LF.
+    with open(args.out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     print(f"written: {args.out} ({q_count} questions, {h_count} handoffs)")
 
