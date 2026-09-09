@@ -410,13 +410,26 @@ def documentation_language(root, sample=200):
     }
 
 
-def scaffold_state(root):
-    """Whether this scaffold is already installed here, and at what version."""
-    coordination = Path(root) / "coordination"
+def scaffold_state(root, coordination_dir=None):
+    """Whether this scaffold is already installed here, and at what version.
+
+    `coordination_dir` mirrors `upgrade.py`'s flag of the same name. The two tools used to
+    disagree: upgrade could be pointed anywhere while discovery only ever looked at
+    `<root>/coordination`, so a project that had moved the directory read as "not
+    installed" to one tool and worked fine with the other.
+
+    Deliberately NOT `coordlib.paths.find_coordination_dir`, though it is already imported
+    in this module: that helper falls back to `<root>/assets/coordination`, which is this
+    skill's own staging layout, and using it would both reintroduce the "shipped tool knows
+    the authoring repository" branch removed in #39 and make discovery report the skill's
+    own checkout as a project with the scaffold installed.
+    """
+    relative = coordination_dir or "coordination"
+    coordination = Path(root) / relative
     if not coordination.is_dir():
         return {"installed": False}
 
-    state = {"installed": True, "coordination_dir": "coordination"}
+    state = {"installed": True, "coordination_dir": str(relative)}
     stamp = manifest.read_stamp(coordination)
     if stamp is None:
         state["stamp"] = None
@@ -442,7 +455,7 @@ def scaffold_state(root):
     return state
 
 
-def discover(root):
+def discover(root, coordination_dir=None):
     """Everything this tool can establish without asking or writing."""
     root = Path(root)
     git = is_git_repo(root)
@@ -458,7 +471,7 @@ def discover(root):
         "existing_coordination_files": existing_coordination_files(root),
         "verification_commands": verification_commands(root),
         "documentation_language": documentation_language(root),
-        "scaffold": scaffold_state(root),
+        "scaffold": scaffold_state(root, coordination_dir),
     }
 
 
@@ -551,6 +564,9 @@ def render(report):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", help="project to inspect (default: discovered repo root)")
+    parser.add_argument("--coordination-dir", default=None,
+                        help="path to coordination/ relative to the root, when the project "
+                             "does not keep it at <root>/coordination (default: that path)")
     parser.add_argument("--json", action="store_true", help="machine-readable output")
     args = parser.parse_args(argv)
 
@@ -563,7 +579,7 @@ def main(argv=None):
         print("discover: %s is not a directory" % root, file=sys.stderr)
         return 0
 
-    report = discover(root)
+    report = discover(root, args.coordination_dir)
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
     else:
