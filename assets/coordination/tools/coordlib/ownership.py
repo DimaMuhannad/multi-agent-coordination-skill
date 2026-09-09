@@ -174,14 +174,19 @@ def parse_ownership(file_path, *, diagnostics=None) -> List[Zone]:
     with open(path, "r", encoding="utf-8", errors="replace", newline="") as handle:
         text = handle.read()
 
-    for offset, char in scan_control_characters(text):
+    # The scanner yields (line number, description). This loop used to destructure that as
+    # (offset, char) and then recompute the line by counting newlines up to the "offset" --
+    # so a control byte on line 40 was reported at roughly line 2, and `observed`, which the
+    # Diagnostic docstring defines as "the raw text that was not recognised", carried the
+    # description string instead of anything from the file. There is no raw text to name for
+    # a control byte, so `observed` is left empty and the description carries the meaning.
+    for line_number, description in scan_control_characters(text):
         diag.record(
             diagnostics,
             diag.CONTROL_CHARACTER,
             path,
-            line=text.count("\n", 0, offset) + 1,
-            detail="control byte in the ownership matrix",
-            observed=repr(char),
+            line=line_number,
+            detail=description,
         )
 
     lines = text.splitlines()
