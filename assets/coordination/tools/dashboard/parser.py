@@ -176,8 +176,8 @@ def parse_questions(path: Path, *, diagnostics=None) -> List[Dict[str, Any]]:
 
             questions.append({
                 "id": qid,
-                "question": cell("question").replace(r"\|", "|").strip(),
-                "answer": cell("answer").replace(r"\|", "|").strip(),
+                "question": md_table.unescape_pipe(cell("question")).strip(),
+                "answer": md_table.unescape_pipe(cell("answer")).strip(),
                 "type": schema.normalise(raw_type),
                 "status": schema.normalise(raw_status),
                 "who": cell("role").strip(),
@@ -245,6 +245,7 @@ def parse_handoffs(path: Path, *, diagnostics=None) -> List[Dict[str, Any]]:
                 "status": None,
                 "start_line": idx,
                 "status_line": None,
+                "status_lines": [],
                 "is_template": schema.is_placeholder_text(date_str) or "template" in date_str.lower(),
             }
             continue
@@ -252,8 +253,12 @@ def parse_handoffs(path: Path, *, diagnostics=None) -> List[Dict[str, Any]]:
         if cur is not None:
             sm = STATUS_RE.search(line)
             if sm:
+                # Last match wins, matching the entry shape HANDOFFS.md documents. This
+                # reader already behaved that way; build_index.py took the first, so the two
+                # disagreed on any entry carrying more than one status line.
                 cur["status"] = schema.normalise(sm.group(1))
                 cur["status_line"] = idx
+                cur["status_lines"].append(idx)
             elif stripped.startswith("- What:"):
                 cur["what"] = stripped[7:].strip()
             elif stripped.startswith("- Context:"):
@@ -265,6 +270,13 @@ def parse_handoffs(path: Path, *, diagnostics=None) -> List[Dict[str, Any]]:
         entries.append(cur)
 
     for entry in entries:
+        if len(entry["status_lines"]) > 1 and not entry["is_template"]:
+            diag.record(
+                diagnostics, diag.MALFORMED_STATUS_LINE, path, entry["status_lines"][-1],
+                "entry has %d `**Status:**` lines; the last one was used"
+                % len(entry["status_lines"]),
+                "lines %s" % ", ".join(str(n) for n in entry["status_lines"]),
+            )
         if entry["status"] is None:
             entry["status"] = schema.MISSING
             if not entry["is_template"]:

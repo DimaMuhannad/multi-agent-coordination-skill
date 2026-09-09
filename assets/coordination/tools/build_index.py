@@ -111,7 +111,11 @@ def parse_questions(path, diagnostics=None):
                 )
             else:
                 seen_ids[rid] = row_index + 1
-            question = cell("question").replace("**", "")
+            # Unescaped for the same reason dashboard/parser.py has always unescaped it: the
+            # value a human wrote is `grep -E "a|b"`, and the backslash exists only so the row
+            # survives the table. Reading it back verbatim made the two shipped readers return
+            # different strings for one cell.
+            question = md_table.unescape_pipe(cell("question")).replace("**", "")
             if len(question) > 110:
                 question = question[:107] + ELLIPSIS
             raw_status = schema.strip_decoration(cell("status"))
@@ -177,17 +181,33 @@ def parse_handoffs(path, diagnostics=None):
                 "text": m.group(2).strip(),
                 "line": i,
                 "status": None,
+                "status_lines": [],
                 "is_template": schema.is_placeholder_text(date) or "template" in date.lower(),
             }
             continue
-        if cur is not None and cur["status"] is None:
+        if cur is not None:
             sm = STATUS_RE.search(raw)
             if sm:
+                # LAST match wins, matching the entry shape HANDOFFS.md documents, where the
+                # status line is the final line of the entry. This used to take the FIRST and
+                # dashboard/parser.py the last, so an entry carrying two of them was read
+                # differently by the two shipped readers.
                 cur["status"] = schema.normalise(sm.group(1))
+                cur["status_lines"].append(i)
     if cur:
         entries.append(cur)
 
     for e in entries:
+        if len(e["status_lines"]) > 1 and not e["is_template"]:
+            # An entry has one status line. More than one is ambiguous, and which one a tool
+            # believes was the difference between the two readers -- so say so instead of
+            # resolving it quietly.
+            diag.record(
+                diagnostics, diag.MALFORMED_STATUS_LINE, path, e["status_lines"][-1],
+                "entry has %d `**Status:**` lines; the last one was used"
+                % len(e["status_lines"]),
+                "lines %s" % ", ".join(str(n) for n in e["status_lines"]),
+            )
         if e["status"] is None:
             e["status"] = schema.MISSING
             if not e["is_template"]:
@@ -207,13 +227,24 @@ def parse_handoffs(path, diagnostics=None):
 
 
 def render_table(rows, id_key, extra_key=None, extra_label=None):
-    head = f"| # | Status | {extra_label + ' | ' if extra_label else ''}Line | Summary |\n"
-    head += f"|---|---|{'---|' if extra_label else ''}---|---|\n"
-    body = []
+    """Render one INDEX.md table.
+
+    Every cell goes through `md_table.format_row`, which escapes pipes and flattens newlines.
+    These rows used to be built by string interpolation, so a question containing a `|` -- a
+    shell pipeline, a regex alternation, a type union -- emitted a row with more columns than
+    its header declared. Markdown renderers do not error on that; they just draw a broken
+    table, and the row that breaks is the one whose text was unusual, which is
+    disproportionately the interesting one (issue #42).
+    """
+    headers = ["#", "Status"] + ([extra_label] if extra_label else []) + ["Line", "Summary"]
+    out = [md_table.format_row(headers), md_table.format_row(["---"] * len(headers))]
     for r in rows:
-        extra = f"{r.get(extra_key, '')} | " if extra_label else ""
-        body.append(f"| `{r[id_key]}` | {r['status'] or EM_DASH} | {extra}[line {r['line']}] | {r['text']} |")
-    return head + "\n".join(body) + "\n"
+        cells = [f"`{r[id_key]}`", r["status"] or EM_DASH]
+        if extra_label:
+            cells.append(r.get(extra_key, "") or "")
+        cells.extend([f"[line {r['line']}]", r["text"]])
+        out.append(md_table.format_row(cells))
+    return "".join(out)
 
 
 def build_index_text(coord_dir=None, diagnostics=None):

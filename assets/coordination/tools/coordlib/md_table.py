@@ -72,6 +72,21 @@ def escape_pipe(text: str) -> str:
     return re.sub(r"(?<!\\)\|", r"\|", text or "")
 
 
+def unescape_pipe(text: str) -> str:
+    """Turn `\\|` back into a bare pipe: the inverse of `escape_pipe`, for display.
+
+    The tokenizer deliberately hands back `\\|` verbatim -- it is reading bytes and must not
+    guess at intent. But the VALUE a human wrote is `grep -E "a|b"`, and the backslash exists
+    only so the row survives the table. Anything showing that value to a person, or comparing
+    it to something a person typed, wants this.
+
+    Both shipped readers needed it and only one had it: `dashboard/parser.py` unescaped the
+    question and answer columns while `build_index.py` did not, so the same cell arrived as
+    two different strings depending on which module you imported.
+    """
+    return (text or "").replace(r"\|", "|")
+
+
 def format_row(cells: Sequence[str], line_ending: str = "\n") -> str:
     """Render cells as a markdown table row, escaping pipes and flattening newlines.
 

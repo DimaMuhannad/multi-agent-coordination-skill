@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 import build_index
+from coordlib import diagnostics as diag
 from coordlib import schema
 from parser import parse_board, parse_handoffs, parse_questions
 
@@ -237,3 +238,76 @@ def test_shipped_templates_parse_with_zero_diagnostics():
     parse_questions(ASSETS_COORDINATION / "QUESTIONS.md", diagnostics=diagnostics)
     parse_handoffs(ASSETS_COORDINATION / "HANDOFFS.md", diagnostics=diagnostics)
     assert [str(d) for d in diagnostics] == []
+
+
+# ======================================================================================
+# One cell value, agreed across every reader
+# ======================================================================================
+
+def test_both_readers_return_the_same_string_for_an_escaped_pipe(tmp_path):
+    """Two shipped readers of the same bytes must not return different values.
+
+    `dashboard/parser.py` unescaped `\\|` for the question and answer columns;
+    `build_index.py` did not. So a question containing a shell pipeline arrived as
+    `grep -E "a|b"` through one module and `grep -E "a\\|b"` through the other, and which one
+    a consumer saw depended on which import it happened to use. Both now go through
+    `md_table.unescape_pipe`, the declared inverse of the `escape_pipe` used on the way out.
+    """
+    questions_md = tmp_path / "QUESTIONS.md"
+    questions_md.write_text(
+        "| # | Question | Owner's answer | Type | Status |\n"
+        "|---|---|---|---|---|\n"
+        "| Q-1 | Use `grep -E \"a\\|b\"`? | took `a\\|b` | blocking | open |\n",
+        encoding="utf-8",
+    )
+
+    core = build_index.parse_questions(str(questions_md))[0]
+    addon = parse_questions(questions_md)[0]
+
+    assert core["text"] == addon["question"]
+    assert 'a|b' in core["text"] and "\\|" not in core["text"]
+
+
+def test_both_readers_agree_on_an_entry_with_two_status_lines(tmp_path):
+    """The second of the four reader divergences #43 listed as blocking.
+
+    `build_index.py` took the FIRST `**Status:**` match in an entry and
+    `dashboard/parser.py` the LAST, so an entry carrying two of them was open to one reader
+    and done to the other. Both now take the last, matching the shape HANDOFFS.md documents,
+    where the status line is the final line of the entry.
+
+    The ambiguity is reported rather than resolved quietly. That also gives
+    `malformed-status-line` its first emitter: the code had been declared since the
+    diagnostics channel was written and never once raised.
+    """
+    handoffs = tmp_path / "HANDOFFS.md"
+    handoffs.write_text(
+        "## [2026-09-09] FROM a TO b - thing\n"
+        "- What: do it\n"
+        "- **Status:** open\n"
+        "- **Status:** done\n",
+        encoding="utf-8",
+    )
+
+    core_diags = diag.DiagnosticList()
+    addon_diags = diag.DiagnosticList()
+    core = build_index.parse_handoffs(str(handoffs), core_diags)
+    addon = parse_handoffs(handoffs, diagnostics=addon_diags)
+
+    assert core[0]["status"] == addon[0]["status"] == "done"
+    for sink in (core_diags, addon_diags):
+        assert diag.MALFORMED_STATUS_LINE in sink.codes(), [str(d) for d in sink]
+
+
+def test_a_single_status_line_is_not_reported(tmp_path):
+    """The guard must stay silent on a well-formed entry, or every project starts noisy."""
+    handoffs = tmp_path / "HANDOFFS.md"
+    handoffs.write_text(
+        "## [2026-09-09] FROM a TO b - thing\n"
+        "- What: do it\n"
+        "- **Status:** open\n",
+        encoding="utf-8",
+    )
+    sink = diag.DiagnosticList()
+    build_index.parse_handoffs(str(handoffs), sink)
+    assert diag.MALFORMED_STATUS_LINE not in sink.codes(), [str(d) for d in sink]

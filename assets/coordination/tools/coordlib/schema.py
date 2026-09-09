@@ -43,8 +43,14 @@ QUESTION_TYPES = ("blocking", "non-blocking")
 #: coordination/BOARD.md `Status (date)` column.
 BOARD_STATUSES = ("active", "idle", "stale", "blocked")
 
-#: Synthetic sentinel: a handoff entry with no status line at all. Not a documented value --
-#: the parsers set it themselves, and it counts as open so the entry stays visible.
+#: Synthetic sentinel: a handoff entry with no status line at all. The parsers set it
+#: themselves and it counts as open, so a request nobody has answered stays visible instead of
+#: disappearing into the closed pile.
+#:
+#: It used to be described here as "not a documented value", which was true and was the
+#: problem: consumers see it in the `status` field alongside the three real words, so it was a
+#: fourth token nothing declared. HANDOFFS.md now names it -- as a word the tools produce and a
+#: person must never write.
 MISSING = "missing"
 
 _OPEN_STATUSES = frozenset({"open", "taken"})
