@@ -335,3 +335,37 @@ def test_wide_table_with_empty_cells_round_trips():
 
     rendered = md_table.format_row(cells)
     assert md_table.split_table_row(rendered.strip()) == cells
+
+
+def test_a_windows_row_tokenizes_like_a_posix_one():
+    """CRLF tolerance, tested at the layer that owns it.
+
+    Readers open journals with `newline=""`, so a Windows checkout hands the tokenizer rows
+    that still end in "\r". Nothing downstream removes it -- `split_table_row` does, on the
+    way in, and that `.strip()` is the tolerance the scaffold documents.
+
+    An end-to-end version of this test was written first and thrown away. The property is
+    defended independently in `iter_table_blocks`, in `split_table_row`, and again in each
+    parser's row handling, so a journal-level assertion survives sabotaging any of them --
+    all five strip sites were removed at once and it still passed. A test that cannot fail
+    is not coverage.
+
+    The one thing that must NOT be identical is `line_ending`: a block records what it found
+    so a writer can put the same bytes back, and flattening that would be the corruption the
+    tolerance exists to avoid.
+    """
+    assert md_table.split_table_row("| a | b |\r") == ["a", "b"]
+    assert md_table.split_table_row("| a | b |") == ["a", "b"]
+
+    crlf = "| Role | Status (date) |\r\n|---|---|\r\n| ORCH | active (2026-09-09) |\r\n"
+    lf = crlf.replace("\r\n", "\n")
+
+    crlf_blocks = list(md_table.iter_table_blocks(crlf.splitlines(True)))
+    lf_blocks = list(md_table.iter_table_blocks(lf.splitlines(True)))
+    assert len(crlf_blocks) == len(lf_blocks) == 1
+
+    for attribute in ("headers", "row_indices", "header_index", "separator_index"):
+        assert getattr(crlf_blocks[0], attribute) == getattr(lf_blocks[0], attribute), attribute
+
+    assert crlf_blocks[0].line_ending == "\r\n"
+    assert lf_blocks[0].line_ending == "\n"

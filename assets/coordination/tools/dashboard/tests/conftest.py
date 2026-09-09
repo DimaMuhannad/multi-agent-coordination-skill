@@ -169,44 +169,6 @@ def mock_git_repo(tmp_path: Path) -> Dict[str, Path]:
 
 
 @pytest.fixture
-def crlf_markdown_files(tmp_path: Path) -> Dict[str, Path]:
-    """
-    Creates coordination markdown files using strict Windows CRLF (\\r\\n) line endings.
-    """
-    crlf_dir = tmp_path / "crlf_coord"
-    crlf_dir.mkdir(parents=True, exist_ok=True)
-
-    board_content = CANONICAL_BOARD.replace("\n", "\r\n")
-    questions_content = CANONICAL_QUESTIONS.replace("\n", "\r\n")
-    handoffs_content = CANONICAL_HANDOFFS.replace("\n", "\r\n")
-    index_content = CANONICAL_INDEX.replace("\n", "\r\n")
-
-    board_file = crlf_dir / "BOARD.md"
-    with open(board_file, "wb") as f:
-        f.write(board_content.encode("utf-8"))
-
-    questions_file = crlf_dir / "QUESTIONS.md"
-    with open(questions_file, "wb") as f:
-        f.write(questions_content.encode("utf-8"))
-
-    handoffs_file = crlf_dir / "HANDOFFS.md"
-    with open(handoffs_file, "wb") as f:
-        f.write(handoffs_content.encode("utf-8"))
-
-    index_file = crlf_dir / "INDEX.md"
-    with open(index_file, "wb") as f:
-        f.write(index_content.encode("utf-8"))
-
-    return {
-        "dir": crlf_dir,
-        "board_file": board_file,
-        "questions_file": questions_file,
-        "handoffs_file": handoffs_file,
-        "index_file": index_file
-    }
-
-
-@pytest.fixture
 def russian_content_files(tmp_path: Path) -> Dict[str, Path]:
     """Canonical ENGLISH headers and status keywords, with Russian prose and emoji as content.
 
