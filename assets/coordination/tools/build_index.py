@@ -181,17 +181,33 @@ def parse_handoffs(path, diagnostics=None):
                 "text": m.group(2).strip(),
                 "line": i,
                 "status": None,
+                "status_lines": [],
                 "is_template": schema.is_placeholder_text(date) or "template" in date.lower(),
             }
             continue
-        if cur is not None and cur["status"] is None:
+        if cur is not None:
             sm = STATUS_RE.search(raw)
             if sm:
+                # LAST match wins, matching the entry shape HANDOFFS.md documents, where the
+                # status line is the final line of the entry. This used to take the FIRST and
+                # dashboard/parser.py the last, so an entry carrying two of them was read
+                # differently by the two shipped readers.
                 cur["status"] = schema.normalise(sm.group(1))
+                cur["status_lines"].append(i)
     if cur:
         entries.append(cur)
 
     for e in entries:
+        if len(e["status_lines"]) > 1 and not e["is_template"]:
+            # An entry has one status line. More than one is ambiguous, and which one a tool
+            # believes was the difference between the two readers -- so say so instead of
+            # resolving it quietly.
+            diag.record(
+                diagnostics, diag.MALFORMED_STATUS_LINE, path, e["status_lines"][-1],
+                "entry has %d `**Status:**` lines; the last one was used"
+                % len(e["status_lines"]),
+                "lines %s" % ", ".join(str(n) for n in e["status_lines"]),
+            )
         if e["status"] is None:
             e["status"] = schema.MISSING
             if not e["is_template"]:
