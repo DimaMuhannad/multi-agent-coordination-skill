@@ -366,3 +366,38 @@ def test_the_new_tools_are_covered_by_the_dependency_guard():
     """
     flat = {path.name for path in (_ASSETS_DIR / "coordination" / "tools").glob("*.py")}
     assert {"discover.py", "upgrade.py"} <= flat
+
+
+def test_scaffold_is_found_where_the_project_actually_keeps_it(tmp_path):
+    """discover and upgrade must agree about where the scaffold may live.
+
+    `upgrade.py` has always taken `--coordination-dir`; discovery hardcoded
+    `<root>/coordination`, so a project that had moved the directory read as "not installed"
+    to one tool while the other worked against it normally.
+    """
+    root = tmp_path / "proj"
+    moved = root / "meta" / "coordination"
+    moved.mkdir(parents=True)
+    (moved / "BOARD.md").write_text("# Board\n", encoding="utf-8")
+
+    assert discover_cli.scaffold_state(root) == {"installed": False}
+
+    found = discover_cli.scaffold_state(root, "meta/coordination")
+    assert found["installed"] is True
+    assert found["coordination_dir"] == "meta/coordination"
+
+
+def test_discovery_does_not_fall_back_to_the_authoring_layout(tmp_path):
+    """`assets/coordination` is this skill's staging path, not a project layout.
+
+    `coordlib.paths.find_coordination_dir` accepts it and is already imported here, so
+    reaching for it is the obvious move -- and it would make discovery report the skill's
+    own checkout as a project with the scaffold installed, reintroducing exactly the branch
+    PR #39 removed from build_index.py and check_rules.py.
+    """
+    root = tmp_path / "vendored"
+    staged = root / "assets" / "coordination"
+    staged.mkdir(parents=True)
+    (staged / "BOARD.md").write_text("# Board\n", encoding="utf-8")
+
+    assert discover_cli.scaffold_state(root) == {"installed": False}

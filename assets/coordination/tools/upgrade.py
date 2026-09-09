@@ -23,6 +23,7 @@ checkout of the skill, which is on disk already because that is how the skill is
 import argparse
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -248,14 +249,44 @@ def pre_existing_divergence(assets_dir, project_root):
     return diverged
 
 
+def upstream_provenance(assets_dir):
+    """(commit, ref) of the checkout `--from` points into, or ("", "") if it is not one.
+
+    The stamp has always had `source_commit` and `source_ref` fields, and nothing ever
+    filled them: the only caller of `build_stamp` passed neither, so every stamp recorded
+    an empty provenance and the report printed "installed <date> from unrecorded" forever.
+    The information was never far away -- `--from` names a directory inside the skill's own
+    checkout -- it was simply never asked for.
+
+    A missing or broken git is not an error here. A baseline with no provenance is worth
+    less than one with it, and worth far more than a failed adopt.
+    """
+    def ask(*args):
+        try:
+            out = subprocess.run(
+                ("git", "-C", str(assets_dir)) + args,
+                capture_output=True, text=True, encoding="utf-8",
+            )
+        except (OSError, ValueError):
+            return ""
+        return out.stdout.strip() if out.returncode == 0 else ""
+
+    commit = ask("rev-parse", "HEAD")
+    ref = ask("rev-parse", "--abbrev-ref", "HEAD")
+    # Detached HEAD reports the branch as "HEAD", which is not a ref anyone can check out.
+    return commit, ("" if ref == "HEAD" else ref)
+
+
 def build_adopted(coordination_dir, assets_dir):
     """Baseline for a project installed before stamping existed.
 
     Hashes what is ON DISK now for the local side, so the first report reads "no drift"
     rather than flagging every local customisation as a conflict on day one.
     """
+    commit, ref = upstream_provenance(assets_dir)
     return manifest.build_stamp(
-        Path(assets_dir), project_root_for(coordination_dir), adopted=True)
+        Path(assets_dir), project_root_for(coordination_dir),
+        source_commit=commit, source_ref=ref, adopted=True)
 
 
 def looks_like_the_skill_itself(coordination_dir):

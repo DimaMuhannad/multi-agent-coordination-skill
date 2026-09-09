@@ -584,3 +584,65 @@ def test_shipped_assets_stamp_and_report_clean(tmp_path):
         manifest.read_stamp(root / "coordination"), root, upgrade_cli.hash_upstream(source))
     assert rows, "no rows produced - the shipped tree was not read"
     assert {row["category"] for row in rows} == {upgrade_cli.UNCHANGED}
+
+
+# ======================================================================================
+# The stamp's provenance fields
+# ======================================================================================
+
+def _bare_project(tmp_path, upstream):
+    """A project with the files installed but no stamp yet -- what `--adopt` is run against."""
+    root = tmp_path / "to-adopt"
+    for asset in manifest.hash_tree(upstream):
+        destination = root / manifest.installed_path_for(asset)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(upstream / asset, destination)
+    return root
+
+
+def _git(cwd, *args):
+    return subprocess.run(
+        ("git", "-C", str(cwd)) + args,
+        capture_output=True, text=True, check=True, encoding="utf-8",
+    ).stdout.strip()
+
+
+def test_adopt_records_which_upstream_commit_it_came_from(tmp_path, upstream):
+    """The question the stamp exists to answer, and could not.
+
+    `build_stamp` has always taken `source_commit` and `source_ref`; its only caller passed
+    neither, so every stamp recorded an empty provenance, the report printed "installed
+    <date> from unrecorded" forever, and discover.py's branch for showing the source could
+    never be reached. The information was one `git rev-parse` away the whole time.
+    """
+    _git(upstream, "init", "-q", "-b", "trunk")
+    _git(upstream, "config", "user.email", "test@example.invalid")
+    _git(upstream, "config", "user.name", "Test")
+    _git(upstream, "add", "-A")
+    _git(upstream, "commit", "-q", "-m", "upstream")
+    head = _git(upstream, "rev-parse", "HEAD")
+
+    project_root = _bare_project(tmp_path, upstream)
+    coordination = project_root / "coordination"
+    assert upgrade_cli.main(
+        ["--from", str(upstream), "--coordination-dir", str(coordination), "--adopt"]) == 0
+
+    stamp = manifest.read_stamp(coordination)
+    assert stamp["source_commit"] == head
+    assert stamp["source_ref"] == "trunk"
+
+
+def test_adopt_against_a_non_git_upstream_still_works(tmp_path, upstream):
+    """A baseline with no provenance beats a failed adopt.
+
+    `--from` can point at an unpacked copy with no history. That is worth less than a real
+    checkout and must not be an error.
+    """
+    project_root = _bare_project(tmp_path, upstream)
+    coordination = project_root / "coordination"
+    assert upgrade_cli.main(
+        ["--from", str(upstream), "--coordination-dir", str(coordination), "--adopt"]) == 0
+
+    stamp = manifest.read_stamp(coordination)
+    assert stamp["source_commit"] == ""
+    assert stamp["source_ref"] == ""

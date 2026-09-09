@@ -341,3 +341,32 @@ def test_shipped_matrix_claims_the_coordination_directory():
     zones = parse_ownership(SHIPPED_MATRIX)
     zone = owner_of("coordination/BOARD.md", zones)
     assert zone is not None and zone.owner == "ORCH"
+
+
+def test_control_character_diagnostic_points_at_the_real_line(tmp_path):
+    """A jump target that is wrong is worse than no jump target.
+
+    The emitter destructured `scan_control_characters`, which yields
+    (line number, description), as (offset, char) and then recomputed the line by counting
+    newlines within the first N characters -- where N was already a line number. So the
+    further down the file the damage sat, the more confidently the diagnostic pointed
+    somewhere else, and `observed` carried the description instead of anything observed.
+    """
+    matrix = tmp_path / "OWNERSHIP.md"
+    padding = "\n".join("Prose line %d, nothing wrong with it." % n for n in range(1, 40))
+    matrix.write_text(
+        padding + "\n"
+        "| Path | Owner |\n"
+        "|---|---|\n"
+        "| `src/**` | dev |\n"
+        "| `docs/\x07**` | writer |\n",
+        encoding="utf-8",
+    )
+
+    sink = diag.DiagnosticList()
+    parse_ownership(matrix, diagnostics=sink)
+
+    found = [item for item in sink if item.code == diag.CONTROL_CHARACTER]
+    assert len(found) == 1, [str(item) for item in sink]
+    assert found[0].line == 43, str(found[0])
+    assert "0x07" in found[0].detail

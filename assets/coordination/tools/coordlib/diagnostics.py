@@ -23,6 +23,11 @@ COLUMN_COUNT_MISMATCH = "column-count-mismatch"
 # Value-level: the data was found, but a field used a word outside the documented vocabulary.
 UNKNOWN_STATUS = "unknown-status"
 UNKNOWN_TYPE = "unknown-type"
+#: The questions table parsed fine and simply has no Type column. Harmless on its own -- the
+#: table signature deliberately requires only {id, question, status} -- but it means the
+#: blocking/non-blocking distinction cannot be computed for any row in that table, and the
+#: one CI gate this scaffold ships for a halted session reads it.
+MISSING_TYPE_COLUMN = "missing-type-column"
 MISSING_STATUS = "missing-status"
 MALFORMED_STATUS_LINE = "malformed-status-line"
 # File-level: the bytes themselves are damaged.
@@ -32,6 +37,14 @@ DUPLICATE_ID = "duplicate-id"
 #: Codes that mean the tool could not reliably locate rows in a file. A file carrying any of
 #: these must be treated as read-only by anything that writes: a tool that cannot read a file
 #: must not write to it.
+#:
+#: Nothing in this repository calls it. The only caller was the dashboard's write path,
+#: deleted in #40 once field data showed it had never been used, and that leaves this looking
+#: exactly like the dead code the deconstruction has been removing all week. It is kept for
+#: one reason that is not a promise about the future: this rule is the fourth of the four
+#: conditions `docs/ru/CONCEPT.md` §6.6 set for writing into the journals, and #43 specifies
+#: it as an obligation on external writers, which is where the caller now lives. If #43 is
+#: closed without adopting it, delete this and `blocks_writes` with it.
 UNSAFE_TO_WRITE_CODES = frozenset({UNKNOWN_TABLE_SCHEMA, NO_HEADER_ROW, CONTROL_CHARACTER})
 
 
