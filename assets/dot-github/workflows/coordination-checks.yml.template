@@ -110,6 +110,40 @@ jobs:
           python coordination/tools/build_index.py \
             --out "$RUNNER_TEMP/INDEX.md" --fail-on-blocking
 
+  index-freshness:
+    name: INDEX.md matches the journals
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Rebuild the index and compare it with the committed one
+        run: |
+          # INDEX.md is a PROJECTION, not a source: its counts, its BLOCKING section and its
+          # line numbers are only as fresh as the last run of build_index.py. Nothing used to
+          # verify that, so anyone reading it -- a person, or an external tool built against
+          # the contract in the skill's references/extension-contract.md -- had no way to tell
+          # whether they were looking at the journals or at a snapshot from three weeks ago.
+          #
+          # A separate job on purpose. Folded into blocking-questions above it would never run
+          # while a blocker is open, which is exactly when the index matters most.
+          #
+          # Not generating INDEX.md at all is a valid choice, so its absence is not a failure.
+          # The check is narrower than that: IF you publish this artifact, it must be true.
+          if [ ! -f coordination/INDEX.md ]; then
+            echo "coordination/INDEX.md is not committed; nothing to keep fresh."
+            exit 0
+          fi
+          python coordination/tools/build_index.py --out "$RUNNER_TEMP/fresh-INDEX.md"
+          if ! diff -u coordination/INDEX.md "$RUNNER_TEMP/fresh-INDEX.md"; then
+            echo "::error file=coordination/INDEX.md::stale. Regenerate it and commit:"
+            echo "  python coordination/tools/build_index.py --out coordination/INDEX.md"
+            exit 1
+          fi
+
   protocol-tests:
     name: Protocol tests (no dependencies)
     runs-on: ubuntu-latest

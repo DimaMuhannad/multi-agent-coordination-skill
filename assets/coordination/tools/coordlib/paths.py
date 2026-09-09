@@ -9,6 +9,10 @@ Two layouts must both work, and conflating them was a real bug:
 git_service.py hardcoded `<root>/assets/.worktrees/`, which only exists in the authoring
 layout, while worktree_launcher.py used `<root>/.worktrees/`. They coincided here and
 diverged in every installed project, leaving the two tools blind to each other's worktrees.
+
+STABILITY: INTERNAL. Layout discovery is this package's own business. Nothing outside this package should depend on the
+names or shapes here; they may change without notice. See the skill's
+references/extension-contract.md for what IS promised.
 """
 
 import os

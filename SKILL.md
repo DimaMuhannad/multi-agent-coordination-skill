@@ -237,6 +237,12 @@ skill's templates — their setup has presumably diverged for reasons specific t
 - `references/git-github-rails.md` — optional server-side layer (CODEOWNERS, CI checks, when to
   use a real PR instead of a `HANDOFFS.md` entry) for a project that's outgrown pure client-side
   enforcement. Read only when step 5 above applies.
+- `references/extension-contract.md` — what a tool built **outside** this repository may rely on
+  when it reads a project's coordination layer: read at a committed revision rather than the
+  working tree, display three states rather than two, which files are sources and which are
+  projections, and which of `coordlib`'s modules are promised. Read it when someone wants a
+  monitoring view, a KPI report or a health console — those live in their own repositories, not
+  in a fork of this one.
 - `docs/ru/CROSS_PLATFORM_BRIDGE.md` — LLM agnosticism, per-role isolation via `git worktree`,
   and the soft context limit. Russian.
 

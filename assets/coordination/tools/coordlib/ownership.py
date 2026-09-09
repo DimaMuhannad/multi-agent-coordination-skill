@@ -12,6 +12,10 @@ the reverse -- is worse than either alone, so the matching lives here once.
 Template rows are skipped rather than obeyed. `OWNERSHIP.md` ships with example rows whose
 owner is `\\<ID\\>`; treating those as real would hand every path to a role that does not
 exist.
+
+STABILITY: INTERNAL. Read the matrix through this module, not around it. Nothing outside this package should depend on the
+names or shapes here; they may change without notice. See the skill's
+references/extension-contract.md for what IS promised.
 """
 
 import re
