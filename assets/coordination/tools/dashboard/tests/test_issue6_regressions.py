@@ -237,3 +237,31 @@ def test_shipped_templates_parse_with_zero_diagnostics():
     parse_questions(ASSETS_COORDINATION / "QUESTIONS.md", diagnostics=diagnostics)
     parse_handoffs(ASSETS_COORDINATION / "HANDOFFS.md", diagnostics=diagnostics)
     assert [str(d) for d in diagnostics] == []
+
+
+# ======================================================================================
+# One cell value, agreed across every reader
+# ======================================================================================
+
+def test_both_readers_return_the_same_string_for_an_escaped_pipe(tmp_path):
+    """Two shipped readers of the same bytes must not return different values.
+
+    `dashboard/parser.py` unescaped `\\|` for the question and answer columns;
+    `build_index.py` did not. So a question containing a shell pipeline arrived as
+    `grep -E "a|b"` through one module and `grep -E "a\\|b"` through the other, and which one
+    a consumer saw depended on which import it happened to use. Both now go through
+    `md_table.unescape_pipe`, the declared inverse of the `escape_pipe` used on the way out.
+    """
+    questions_md = tmp_path / "QUESTIONS.md"
+    questions_md.write_text(
+        "| # | Question | Owner's answer | Type | Status |\n"
+        "|---|---|---|---|---|\n"
+        "| Q-1 | Use `grep -E \"a\\|b\"`? | took `a\\|b` | blocking | open |\n",
+        encoding="utf-8",
+    )
+
+    core = build_index.parse_questions(str(questions_md))[0]
+    addon = parse_questions(questions_md)[0]
+
+    assert core["text"] == addon["question"]
+    assert 'a|b' in core["text"] and "\\|" not in core["text"]

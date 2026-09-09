@@ -24,6 +24,7 @@ DASHBOARD_DIR = Path(__file__).resolve().parent.parent
 if str(DASHBOARD_DIR) not in sys.path:
     sys.path.insert(0, str(DASHBOARD_DIR))
 
+from coordlib import md_table
 from parser import (
     split_table_row,
     parse_board,
@@ -178,6 +179,45 @@ class TestAdversarialBuildIndexCompatibility(unittest.TestCase):
             self.assertEqual(res.returncode, 2, res.stdout + res.stderr)
             self.assertIn("--coordination-dir", res.stderr)
             self.assertFalse(out_file.exists(), "an unusable run must not write an index")
+
+    def test_a_pipe_in_a_question_does_not_shatter_the_index_table(self):
+        """Issue #42: index rows were built by string interpolation, so a `|` in a question
+        emitted a row with more columns than its header declared.
+
+        Markdown renderers do not error on that -- they draw a broken table -- and the row
+        that breaks is the one whose text was unusual, which is disproportionately the
+        interesting one. The check is a round trip: tokenize the rendered row back and count
+        cells, rather than eyeballing the string.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            coord = Path(tmpdir) / "coordination"
+            coord.mkdir()
+            (coord / "QUESTIONS.md").write_text(
+                "| # | Question | Owner's answer | Type | Status |\n"
+                "|---|---|---|---|---|\n"
+                "| Q-1 | Use `grep -E \"a\\|b\"` or a union? | - | blocking | open |\n",
+                encoding="utf-8",
+            )
+            out_file = Path(tmpdir) / "INDEX.md"
+            res = subprocess.run(
+                [sys.executable, str(BUILD_INDEX_PATH),
+                 "--coordination-dir", str(coord), "--out", str(out_file)],
+                capture_output=True, text=True, encoding="utf-8",
+            )
+            self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+
+            # The row appears twice by design: once in the BLOCKING section at the top of the
+            # index and once in the open-questions table. Both are rendered by the same
+            # function, and both must tokenize back to the five columns their header declares.
+            written = out_file.read_text(encoding="utf-8")
+            rows = [line for line in written.splitlines() if line.startswith("| `Q-1`")]
+            self.assertTrue(rows, written)
+            for row in rows:
+                self.assertEqual(len(split_table_row(row)), 5, row)
+
+            # And the value survives the trip: escaped in the file, bare once tokenized.
+            self.assertIn(r"a\|b", rows[0])
+            self.assertIn('a|b', md_table.unescape_pipe(split_table_row(rows[0])[-1]))
 
 
 if __name__ == "__main__":

@@ -176,8 +176,8 @@ def parse_questions(path: Path, *, diagnostics=None) -> List[Dict[str, Any]]:
 
             questions.append({
                 "id": qid,
-                "question": cell("question").replace(r"\|", "|").strip(),
-                "answer": cell("answer").replace(r"\|", "|").strip(),
+                "question": md_table.unescape_pipe(cell("question")).strip(),
+                "answer": md_table.unescape_pipe(cell("answer")).strip(),
                 "type": schema.normalise(raw_type),
                 "status": schema.normalise(raw_status),
                 "who": cell("role").strip(),
