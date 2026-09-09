@@ -14,9 +14,14 @@ Write the request here, offer to switch the owner into the right session or laun
 - **Status:** open|taken|done
 ```
 
-That **exact** last line — `- **Status:** open|taken|done` with no variant phrasing — is what
-`coordination/tools/build_index.py` parses to build `INDEX.md`. This is the single biggest
-lesson worth taking from projects that didn't enforce this from day one: a status line whose
+That last line — `- **Status:** open|taken|done` — is what
+`coordination/tools/build_index.py` parses to build `INDEX.md`. Write it exactly. The parser is
+in fact a little more forgiving than that (the colon is optional, the case is ignored, and the
+marker is found mid-line), but **do not rely on it**: the leniency is an implementation detail
+nobody promised, the three keywords are not lenient at all, and a project that drifts toward
+"whatever the tool happens to accept" is the one this section exists to warn about.
+
+This is the single biggest lesson worth taking from projects that didn't enforce this from day one: a status line whose
 exact wording isn't specified drifts into half a dozen different phrasings over months (`Status:`
 vs `Статус:` vs `done (resolved)` vs a status buried mid-paragraph), and an index tool built
 against "the status line" quietly stops finding some of them. Enforce the literal string from the
