@@ -29,6 +29,14 @@ parsed by tooling, while the What/Context/Done-when text is prose and is not
 Closing an entry means editing that one line in place (`open` → `done`) — that's not a violation
 of append-only, since the surrounding decision text above it isn't touched.
 
+**A fourth word you may see but must never write: `missing`.** An entry with no status line at
+all is reported as `missing` by the tools and counted as **open**, so a request nobody has
+answered stays visible instead of disappearing into the closed pile. It is produced by the
+readers, never by a person, and it is not a status you can set — writing it into an entry
+yourself makes that entry indistinguishable from a broken one. If two `**Status:**` lines end up
+in one entry, the last is used and the duplication is reported; that is ambiguity, not a
+vocabulary word.
+
 > If your project renames or moves paths referenced in old entries, this file being append-only
 > means those old entries will reference stale paths forever. A short translation-table note at
 > the top of the file (old path → new path, with the date/reason) costs one paragraph and saves
