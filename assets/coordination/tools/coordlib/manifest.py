@@ -13,6 +13,10 @@
   * **Which files are not part of the scaffold at all?** `__pycache__` and friends.
 
 Stdlib only, like everything that ships with the core scaffold.
+
+STABILITY: INTERNAL. The stamp's path and its `format` field are promised; this reader is not. Nothing outside this package should depend on the
+names or shapes here; they may change without notice. See the skill's
+references/extension-contract.md for what IS promised.
 """
 
 import fnmatch

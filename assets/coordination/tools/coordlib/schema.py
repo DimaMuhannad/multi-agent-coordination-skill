@@ -22,6 +22,11 @@ answers, summaries and handoff bodies in whatever language the project uses; the
 and the table headers stay English, because tooling parses them. The skill's references/rationale.md
 records what happened to the source project when that was left implicit. The tools do not
 guess at a translation -- they report `unknown-status` and let a human fix the file.
+
+STABILITY: PROMISED. An external extension may depend on the names and behaviour in this
+module -- breaking them is a breaking change. The vocabularies, the classifiers and the
+header/signature resolution are the normative definition an outside reader must agree with;
+the skill's references/extension-contract.md points here rather than restating them.
 """
 
 import re

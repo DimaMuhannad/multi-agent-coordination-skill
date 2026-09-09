@@ -121,3 +121,51 @@ def test_every_shipped_writer_pins_the_line_ending():
             if "newline=" not in line:
                 offenders.append("%s:%d %s" % (path.name, number, line.strip()))
     assert not offenders, "text-mode writes without an explicit newline=: %s" % offenders
+
+
+# ======================================================================================
+# The extension contract and the module docstrings state the same fact
+# ======================================================================================
+
+_COORDLIB = _ASSETS_DIR / "coordination" / "tools" / "coordlib"
+_CONTRACT = _ASSETS_DIR.parent / "references" / "extension-contract.md"
+
+#: The only two modules an external extension may depend on. Everything else in coordlib is
+#: free to change. Kept here rather than derived, so widening the promise is a visible edit.
+PROMISED_MODULES = {"schema", "diagnostics"}
+
+
+def test_every_coordlib_module_declares_its_stability():
+    """A vendored copy travels without references/, so the promise has to be in the code.
+
+    The contract file states which modules are promised; the docstrings state the same thing
+    where an outside reader will actually meet it. Two statements of one fact is what this
+    project's own rationale warns about -- so they are checked against each other rather than
+    kept in sync by hand.
+    """
+    modules = sorted(path.stem for path in _COORDLIB.glob("*.py")
+                     if path.stem != "__init__")
+    assert modules, "no coordlib modules found at %s" % _COORDLIB
+
+    promised, internal = set(), set()
+    for name in modules:
+        text = _read(_COORDLIB / ("%s.py" % name))
+        marks = [line for line in text.splitlines() if line.startswith("STABILITY:")]
+        assert len(marks) == 1, "%s.py has %d STABILITY lines" % (name, len(marks))
+        (promised if "PROMISED" in marks[0] else internal).add(name)
+
+    assert promised == PROMISED_MODULES, (
+        "the promised set changed: %s. Widening it freezes a surface -- update the table in "
+        "references/extension-contract.md and this test together, deliberately."
+        % sorted(promised)
+    )
+    assert internal == set(modules) - PROMISED_MODULES
+
+
+def test_the_contract_names_the_modules_it_promises():
+    contract = _read(_CONTRACT)
+    for name in PROMISED_MODULES:
+        assert "coordlib.%s" % name in contract, name
+    # And it must not quietly become the place the rules are restated: the whole point is that
+    # it points at the module. A copy of the alias table here is a copy that will desync.
+    assert "_COLUMN_ALIASES" not in contract

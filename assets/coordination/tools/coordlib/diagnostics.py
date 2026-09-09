@@ -9,6 +9,10 @@ wrong are worse than an error, because they get believed.
 
 Nothing here translates anything. A Diagnostic means "this file used a schema or a vocabulary
 the tools do not recognise" -- the fix is to correct the file, not for the tool to guess.
+
+STABILITY: PROMISED. The code strings, `Diagnostic`'s five fields and `UNSAFE_TO_WRITE_CODES`
+are what an external consumer keys on -- breaking them is a breaking change. See the skill's
+references/extension-contract.md.
 """
 
 from dataclasses import dataclass, field

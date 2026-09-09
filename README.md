@@ -72,6 +72,18 @@ problem it solves.
   variable; that half was removed once field data showed nobody had ever used it. For the same
   view with no dependency at all, `build_index.py` writes `INDEX.md`.
 
+### Building something on top
+
+Monitoring, effectiveness reports, project-health consoles — those belong in **their own
+repositories**, not here and not in a fork of this one. A fork exists to converge back; an
+extension that consumes the coordination layer never will.
+
+[`references/extension-contract.md`](references/extension-contract.md) states what such a tool
+may rely on: read at a committed revision rather than the working tree (no writer here is
+atomic), display three states rather than two, which files are sources and which are
+projections, and which of `coordlib`'s modules are promised. It is deliberately short and points
+at the code instead of restating it.
+
 ## Using it
 
 Install as a Claude Code Skill (see Claude Code's skill docs for how skills are discovered in

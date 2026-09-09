@@ -13,6 +13,10 @@ careful version. This module keeps the careful one and both callers now share it
 `append_question` scanned for "the last pipe-prefixed line in the whole file" with no notion
 of which table it belonged to, so a new question appended to whatever table happened to come
 last -- in the reporter's case a table of physical measurements, which it corrupted.
+
+STABILITY: INTERNAL. The on-disk table shape is promised; this tokenizer's internals are not. Nothing outside this package should depend on the
+names or shapes here; they may change without notice. See the skill's
+references/extension-contract.md for what IS promised.
 """
 
 import re
