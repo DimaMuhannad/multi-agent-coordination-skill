@@ -196,3 +196,56 @@ def test_the_shipped_template_leaves_q1_free_for_a_real_question(tmp_path):
     rows = build_index.parse_questions(str(tmp_path / "QUESTIONS.md"), sink)
     assert diag.DUPLICATE_ID not in sink.codes()
     assert sorted(row["id"] for row in rows) == ["EX-1", "EX-2", "Q-1"]
+
+
+# ======================================================================================
+# A gate that cannot see the signal must not report the signal as absent
+# ======================================================================================
+
+_NO_TYPE_COLUMN = (
+    "| # | Question | Owner's answer | Status |\n"
+    "|---|---|---|---|\n"
+    "| Q-1 | Stopped, need a decision | - | open |\n"
+)
+
+
+def test_a_questions_table_without_a_type_column_is_reported(tmp_path):
+    """The table parses. That is the problem.
+
+    {id, question, status} is the whole signature, so a table with no Type column is read
+    normally and every row classifies as neither blocking nor non-blocking. Before this,
+    that produced zero diagnostics -- the tool said nothing at all about a distinction it
+    could not make.
+    """
+    (tmp_path / "QUESTIONS.md").write_text(_NO_TYPE_COLUMN, encoding="utf-8")
+    sink = diag.DiagnosticList()
+    rows = build_index.parse_questions(str(tmp_path / "QUESTIONS.md"), sink)
+
+    assert [r["id"] for r in rows] == ["Q-1"]
+    assert diag.MISSING_TYPE_COLUMN in sink.codes(), [str(d) for d in sink]
+
+
+def test_the_gate_refuses_to_pass_a_table_it_cannot_classify(tmp_path):
+    """`0 blocking` here means "could not tell", not "nothing is stopped".
+
+    --fail-on-blocking is the one check this scaffold ships for a halted session. Against a
+    journal with no Type column it used to exit 0 forever, which is the "Open Questions: 0"
+    incident wearing a CI badge.
+    """
+    coord = tmp_path / "coordination"
+    coord.mkdir()
+    (coord / "QUESTIONS.md").write_text(_NO_TYPE_COLUMN, encoding="utf-8")
+    out = tmp_path / "INDEX.md"
+
+    assert _run(coord, out).returncode == 0, "without the flag this is still just a build"
+
+    gated = _run(coord, out, "--fail-on-blocking")
+    assert gated.returncode == 2, gated.stdout + gated.stderr
+    assert "no Type column" in gated.stderr
+    assert "CANNOT GATE" in gated.stderr
+
+
+def test_the_shipped_template_can_be_gated(tmp_path):
+    """The guard must not fire on a normal install, or every project starts red."""
+    result = _run(_ASSETS_DIR / "coordination", tmp_path / "INDEX.md", "--fail-on-blocking")
+    assert result.returncode == 0, result.stdout + result.stderr

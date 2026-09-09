@@ -324,6 +324,12 @@ Only do this once `references/git-github-rails.md` §"when this earns its place"
    Open blockers are also listed in a section at the very top of `INDEX.md` — above every other
    table, because a section below three tables is a section nobody scrolls to.
 
+   **The flag needs a `Type` column to have anything to gate on.** The questions table is
+   recognised by `#`/`Question`/`Status` alone, so a journal without `Type` parses perfectly
+   and every row classifies as neither blocking nor non-blocking. `--fail-on-blocking` then
+   exits **2** and says so, rather than reporting zero blockers and going green forever. Exit
+   1 still means what it always meant: a real blocker was found.
+
 4. **Branch protection (needs repo admin rights).** In the GitHub UI: Settings → Branches → Add
    branch protection rule → target the default branch → enable "Require status checks to pass"
    and select the `checks` job from `coordination-checks.yml` → optionally also enable "Require

@@ -83,6 +83,17 @@ def parse_questions(path, diagnostics=None):
                 " | ".join(block.headers),
             )
             continue
+        if "type" not in resolved:
+            # Not a schema failure: {id, question, status} is the whole signature, so a table
+            # without Type is read normally. It does mean `blocking` cannot be computed for
+            # any row here, and --fail-on-blocking is the one gate this scaffold ships for a
+            # session that has stopped. Silence would make that gate permanently green.
+            diag.record(
+                diagnostics, diag.MISSING_TYPE_COLUMN, path, block.header_index + 1,
+                "no Type column; blocking/non-blocking cannot be determined for this table",
+                " | ".join(block.headers),
+            )
+
         for row_index in block.row_indices:
             cells = split_table_row(lines[row_index].strip())
 
@@ -339,8 +350,22 @@ def main():
         )
         if args.strict:
             return 2
-    if args.fail_on_blocking and blocking:
-        return 1
+    if args.fail_on_blocking:
+        # A gate that cannot see the signal must not report the signal as absent. With no
+        # Type column every row classifies as neither blocking nor non-blocking, so `0
+        # blocking` here means "could not tell", not "nothing is stopped". Exit 2, the code
+        # this tool already uses for "something could not be interpreted", so a build can
+        # tell it apart from exit 1, which means a real blocker was found.
+        blind = [d for d in diagnostics if d.code == diag.MISSING_TYPE_COLUMN]
+        if blind:
+            print(
+                "CANNOT GATE: %d questions table(s) have no Type column, so --fail-on-blocking "
+                "has nothing to test. Add the column, or drop the flag." % len(blind),
+                file=sys.stderr,
+            )
+            return 2
+        if blocking:
+            return 1
     return 0
 
 

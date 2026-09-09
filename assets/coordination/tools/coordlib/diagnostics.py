@@ -23,6 +23,11 @@ COLUMN_COUNT_MISMATCH = "column-count-mismatch"
 # Value-level: the data was found, but a field used a word outside the documented vocabulary.
 UNKNOWN_STATUS = "unknown-status"
 UNKNOWN_TYPE = "unknown-type"
+#: The questions table parsed fine and simply has no Type column. Harmless on its own -- the
+#: table signature deliberately requires only {id, question, status} -- but it means the
+#: blocking/non-blocking distinction cannot be computed for any row in that table, and the
+#: one CI gate this scaffold ships for a halted session reads it.
+MISSING_TYPE_COLUMN = "missing-type-column"
 MISSING_STATUS = "missing-status"
 MALFORMED_STATUS_LINE = "malformed-status-line"
 # File-level: the bytes themselves are damaged.
