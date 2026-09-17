@@ -228,3 +228,45 @@ def test_the_contract_names_the_modules_it_promises():
     # And it must not quietly become the place the rules are restated: the whole point is that
     # it points at the module. A copy of the alias table here is a copy that will desync.
     assert "_COLUMN_ALIASES" not in contract
+
+
+# ======================================================================================
+# A documented hook registration must anchor its path to the project
+# ======================================================================================
+
+_SETUP = _ASSETS_DIR.parent / "references" / "setup.md"
+
+
+def test_every_documented_hook_registration_anchors_to_the_project_dir():
+    """A relative hook command resolves against the TOOL CALL's working directory.
+
+    So the first `cd` into a subdirectory takes the hook out of service -- for a reporting
+    hook that is a missed warning, for the two barrier hooks it is the barrier not being
+    there, with nothing in the transcript to show it (issue #56).
+
+    This is asserted over the documentation because the documentation is the thing that gets
+    copied into a project's settings.json. It is also the line most likely to be "cleaned up"
+    by someone who reads `$CLAUDE_PROJECT_DIR` as redundant quoting, which is why it is a
+    test and not a comment.
+    """
+    offenders = []
+    for number, line in enumerate(_read(_SETUP).splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped.startswith('"command":'):
+            continue
+        if ".claude/hooks/" not in stripped:
+            continue
+        if "$CLAUDE_PROJECT_DIR" not in stripped:
+            offenders.append("setup.md:%d %s" % (number, stripped))
+    assert not offenders, (
+        "hook registrations documented with a path relative to the caller's cwd: %s"
+        % offenders)
+
+
+def test_the_shipped_hooks_document_the_anchored_form_too():
+    """The wiring snippet inside a hook's own docstring travels with the file."""
+    hooks = _ASSETS_DIR / "dot-claude" / "hooks"
+    for name in ("check-commit-trailers.py", "check-path-ownership.py"):
+        text = _read(hooks / name)
+        assert "CLAUDE_PROJECT_DIR" in text, (
+            "%s does not mention the project-anchored path anywhere" % name)

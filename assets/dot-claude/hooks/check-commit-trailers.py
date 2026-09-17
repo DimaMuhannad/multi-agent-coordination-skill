@@ -35,7 +35,14 @@ a spurious message here costs one line of output.
 Wire it up per the skill's `references/setup.md §9` (it is opt-in, like the ownership hook):
 
     {"hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [
-        {"type": "command", "command": "python3 .claude/hooks/check-commit-trailers.py"}]}]}}
+        {"type": "command",
+         "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-commit-trailers.py\""}]}]}}
+
+The path is anchored to the project rather than written relative, and that is not redundant
+quoting to tidy away: a relative command resolves against the TOOL CALL's working directory.
+One `cd` into a subdirectory and the file is not there any more, so the hook stops running --
+reported live in issue #56, where a write barrier vanished because a session had changed
+directory.
 
 Deliberate choices, each a decision not to be clever:
 
