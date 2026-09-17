@@ -36,6 +36,8 @@ from coordlib.paths import find_coordination_dir, find_repo_root  # noqa: E402
 
 #: Categories, in the order a reader should work through them.
 UNCHANGED = "unchanged"
+ALREADY_CURRENT = "already-current"
+UPSTREAM_DELETED = "upstream-deleted"
 UPSTREAM_ONLY = "upstream-only"
 UPSTREAM_ONLY_BUT_CUSTOMIZED = "upstream-only-but-customized"
 LOCAL_ONLY = "local-only"
@@ -106,6 +108,19 @@ def compare(stamp, project_root, upstream):
                                  and upstream_digest != upstream_baseline),
         }
 
+        if upstream_digest is None and (project_root / installed_path).exists():
+            # Gone from upstream, still here. Reaching this by falling through to
+            # `unchanged` is how issue #53 broke a consumer's tree: `upstream_changed` is
+            # false when there is no upstream digest, so three files whose module had been
+            # refactored away sat in the bucket whose summary line is "N file(s)
+            # unchanged", and taking their dependants stopped the suite from collecting.
+            # The mirror image has had `deleted-locally` since the beginning; this
+            # direction needs a name of its own for the same reason.
+            row["local_changed"] = None
+            row["category"] = UPSTREAM_DELETED
+            rows.append(row)
+            continue
+
         if file_class not in COMPARABLE_CLASSES:
             # The local file is meant to differ; only the upstream side is comparable.
             row["local_changed"] = None
@@ -122,7 +137,21 @@ def compare(stamp, project_root, upstream):
 
         local_changed = local_digest != installed_baseline
         row["local_changed"] = local_changed
-        if local_changed and row["upstream_changed"]:
+
+        # The question every other branch here forgets to ask: is the file ALREADY the
+        # upstream one? Both baselines can say "changed" about a copy that is byte-identical
+        # to the new upstream -- which is exactly what taking an update by hand produces,
+        # since this tool reports and does not merge. Without this, a consumer's second run
+        # reports every file they took as `both` ("reconcile by hand") and exits 1 forever:
+        # issue #52, 28 of 28 rows, all verified identical to upstream by sha256.
+        #
+        # Guarded on either side having moved so that the quiet case stays quiet: a file
+        # nobody has touched on either side is still plain `unchanged`, not a row claiming
+        # an update was taken.
+        if (upstream_digest is not None and local_digest == upstream_digest
+                and (local_changed or row["upstream_changed"])):
+            row["category"] = ALREADY_CURRENT
+        elif local_changed and row["upstream_changed"]:
             row["category"] = BOTH
         elif row["upstream_changed"]:
             # "Untouched since baseline" carries two different histories. For a file that was
@@ -173,6 +202,10 @@ _EXPLANATIONS = (
      "above, not like the ones below: copying upstream across discards the customisation."),
     (UPSTREAM_ONLY, "Safe to take - upstream changed, your copy is untouched",
      "These carry the fixes. Copy them across."),
+    (UPSTREAM_DELETED, "GONE FROM UPSTREAM - yours alone now",
+     "Upstream removed these; your copy is all that is left. Keep, archive or delete them "
+     "deliberately -- and check what still imports them before you take anything else, "
+     "because a file above may be the module these were written against."),
     (NEW_UPSTREAM, "New upstream - did not exist when you installed",
      "Review and install the ones you want."),
     (DELETED_LOCALLY, "Missing locally",
@@ -181,6 +214,9 @@ _EXPLANATIONS = (
      "Your filled-in copy is yours; compare against the new seed and port what applies."),
     (LOCAL_ONLY, "Yours alone - upstream unchanged",
      "Nothing to do. Listed so you can see what you have customised."),
+    (ALREADY_CURRENT, "Already current - identical to upstream",
+     "You have taken these already; your copy matches upstream byte for byte. Listed so a "
+     "run after an update shows the work landing, rather than silence."),
 )
 
 
@@ -211,7 +247,7 @@ def render(rows, stamp, upstream_ref="", strict=False):
         items = grouped.get(category)
         if not items:
             continue
-        if category != LOCAL_ONLY:
+        if category not in (LOCAL_ONLY, ALREADY_CURRENT):
             actionable += len(items)
         lines.append("%s (%d)" % (title, len(items)))
         lines.append("  %s" % explanation)
