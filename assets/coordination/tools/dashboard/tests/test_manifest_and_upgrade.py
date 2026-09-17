@@ -646,3 +646,116 @@ def test_adopt_against_a_non_git_upstream_still_works(tmp_path, upstream):
     stamp = manifest.read_stamp(coordination)
     assert stamp["source_commit"] == ""
     assert stamp["source_ref"] == ""
+
+
+# ---------------------------------------------------------------------------------------
+# The update channel, end to end: report -> take the files -> report again
+#
+# Both defects below were reported from a live installation (issues #52 and #53), and both
+# are about the SECOND run. The first report is useful; what a consumer does next is take
+# the files by hand -- this tool reports and does not merge -- and it was that step the
+# comparison could not see.
+# ---------------------------------------------------------------------------------------
+
+def _take(project, upstream, rows_by_path, category):
+    """Copy every row in `category` from upstream over the project's copy.
+
+    This is the documented workflow, performed literally: the report names files, a human
+    copies them across.
+    """
+    taken = []
+    for path, found in rows_by_path.items():
+        if found != category:
+            continue
+        asset = upstream / _asset_for(upstream, path)
+        shutil.copyfile(asset, project / path)
+        taken.append(path)
+    return taken
+
+
+def _asset_for(upstream, installed_path):
+    for asset in manifest.hash_tree(upstream):
+        if manifest.installed_path_for(asset) == installed_path:
+            return asset
+    raise AssertionError("no upstream asset maps to %s" % installed_path)
+
+
+def test_a_file_taken_from_upstream_is_current_not_a_conflict(project, upstream):
+    """Issue #52: the channel used to break on its second use.
+
+    Both baselines say "changed" about a copy that is byte-identical to the new upstream,
+    so every file a consumer took came back as `both` -- the loudest category the tool has,
+    reserved for rows that need a human -- and stayed there forever.
+    """
+    with open(upstream / "coordination" / "tools" / "build_index.py", "a",
+              encoding="utf-8") as fh:
+        fh.write("# fixed upstream\n")
+
+    first = _report(project, upstream)
+    assert first["coordination/tools/build_index.py"] == upgrade_cli.UPSTREAM_ONLY
+    assert _take(project, upstream, first, upgrade_cli.UPSTREAM_ONLY)
+
+    second = _report(project, upstream)
+    assert second["coordination/tools/build_index.py"] == upgrade_cli.ALREADY_CURRENT, (
+        "a file identical to upstream was reported as needing reconciliation")
+
+
+def test_taking_an_update_clears_the_gating_exit_code(project, upstream):
+    """The half that actually blocked people: the shipped CI workflow keys on this code."""
+    with open(upstream / "coordination" / "tools" / "build_index.py", "a",
+              encoding="utf-8") as fh:
+        fh.write("# fixed upstream\n")
+    coordination = project / "coordination"
+    args = ["--from", str(upstream), "--coordination-dir", str(coordination)]
+
+    assert upgrade_cli.main(args) == 0, "an untaken upstream-only row must not gate"
+    _take(project, upstream, _report(project, upstream), upgrade_cli.UPSTREAM_ONLY)
+    assert upgrade_cli.main(args) == 0, "taking the update left the build red"
+
+
+def test_a_real_conflict_is_still_a_conflict(project, upstream):
+    """The guard that keeps the fix honest: `already-current` must not swallow `both`."""
+    with open(upstream / "coordination" / "tools" / "build_index.py", "a",
+              encoding="utf-8") as fh:
+        fh.write("# fixed upstream\n")
+    with open(project / "coordination" / "tools" / "build_index.py", "a",
+              encoding="utf-8") as fh:
+        fh.write("# and mine, differently\n")
+
+    assert _report(project, upstream)["coordination/tools/build_index.py"] == \
+        upgrade_cli.BOTH
+
+
+def test_a_file_deleted_upstream_is_not_filed_under_unchanged(project, upstream):
+    """Issue #53: the category a consumer is told to ignore is where orphans landed.
+
+    `upstream_changed` is false when there is no upstream digest at all, so a locally
+    untouched file whose upstream copy had been deleted fell through to `unchanged`. A
+    consumer then took its dependants and the import graph broke, with nothing in the
+    report pointing at the cause.
+    """
+    (upstream / "coordination" / "tools" / "kpi_git.py").unlink()
+
+    row = _report(project, upstream)["coordination/tools/kpi_git.py"]
+    assert row == upgrade_cli.UPSTREAM_DELETED, (
+        "a file gone from upstream was reported as %s" % row)
+
+
+def test_a_file_gone_from_both_sides_is_reported_as_missing_locally(project, upstream):
+    """The boundary: upstream-deleted means "still yours", not "retired everywhere"."""
+    (upstream / "coordination" / "tools" / "kpi_git.py").unlink()
+    (project / "coordination" / "tools" / "kpi_git.py").unlink()
+
+    assert _report(project, upstream)["coordination/tools/kpi_git.py"] == \
+        upgrade_cli.DELETED_LOCALLY
+
+
+def test_the_upstream_deleted_bucket_says_to_check_what_imports_them(project, upstream):
+    """The sentence that would have saved the reporter a debugging session."""
+    (upstream / "coordination" / "tools" / "kpi_git.py").unlink()
+    stamp = manifest.read_stamp(project / "coordination")
+    rows = upgrade_cli.compare(stamp, project, upgrade_cli.hash_upstream(upstream))
+
+    text = upgrade_cli.render(rows, stamp)
+    assert "GONE FROM UPSTREAM" in text
+    assert "imports" in text

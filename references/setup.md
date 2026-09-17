@@ -491,13 +491,22 @@ sorts every file into one bucket:
 | `upstream-only-but-customized` | untouched *since* the baseline, but it was already your own content when the baseline was frozen — never the shipped seed. Review by hand; copying upstream across discards the customisation |
 | `upstream-only` | your copy is untouched; copy the new one across |
 | `new-upstream` | did not exist when you installed |
+| `upstream-deleted` | upstream removed it; your copy is all that is left. Keep, archive or delete deliberately — and check what still imports it before taking anything else |
 | `deleted-locally` | reinstall, or confirm the removal was deliberate |
 | `seed-changed` | a template you filled in has moved upstream; compare and port what applies |
 | `local-only` | yours alone. Listed so you can see your customisations, never a problem |
+| `already-current` | you took this one already and it matches upstream byte for byte. Never a problem |
 
 Exit 0 when nothing needs a person, 1 when a row needs one — usable as a CI gate. One rule,
 the same in every project: **red means a `both` row.** Adding `--strict` also fails on
 `upstream-only-but-customized`.
+
+**Taking a file is how you finish a row, and the next report will say so.** This tool reports
+and does not merge, so applying an update means copying the files across by hand; on the next
+run those rows read `already-current` and stop affecting the exit code. Two buckets are worth
+reading even though neither gates: `already-current` is how you confirm an update actually
+landed, and `upstream-deleted` is the one that can break a tree — a file upstream retired is
+often the module other files you are about to take were written against.
 
 That second category carries the same risk as a `both` row — a hand-written file that
 upstream has also moved — so a project that wants its build to stop on those should pass
