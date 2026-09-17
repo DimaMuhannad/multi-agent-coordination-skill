@@ -244,9 +244,14 @@ def test_the_contract_names_the_modules_it_promises():
 # A documented hook registration must anchor its path to the project
 # ======================================================================================
 
+#: Both tests below read the skill repository's own tree -- references/ and the pre-install
+#: dot-claude/ staging path -- so they are marked `skill_repo` and skip in an installed
+#: project. They were written one PR before that marker existed; merged together, they failed
+#: in a consumer project and reintroduced exactly the defect #54 had just fixed.
 _SETUP = _ASSETS_DIR.parent / "references" / "setup.md"
 
 
+@pytest.mark.skill_repo
 def test_every_documented_hook_registration_anchors_to_the_project_dir():
     """A relative hook command resolves against the TOOL CALL's working directory.
 
@@ -273,6 +278,7 @@ def test_every_documented_hook_registration_anchors_to_the_project_dir():
         % offenders)
 
 
+@pytest.mark.skill_repo
 def test_the_shipped_hooks_document_the_anchored_form_too():
     """The wiring snippet inside a hook's own docstring travels with the file."""
     hooks = _ASSETS_DIR / "dot-claude" / "hooks"
