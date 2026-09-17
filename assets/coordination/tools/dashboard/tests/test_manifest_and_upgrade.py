@@ -546,6 +546,7 @@ def test_cli_rejects_a_missing_upstream(project, capsys):
 # The shipped scaffold must satisfy its own tooling
 # ---------------------------------------------------------------------------------------
 
+@pytest.mark.skill_repo
 def test_shipped_assets_classify_without_falling_through(tmp_path):
     """Every shipped file lands in a real class, and the four classes are all populated.
 

@@ -125,6 +125,7 @@ def test_cli_is_green_once_the_blocker_is_answered(tmp_path):
     assert _run(tmp_path, tmp_path / "INDEX.md", "--fail-on-blocking").returncode == 0
 
 
+@pytest.mark.skill_repo
 def test_the_shipped_workflow_wires_the_check_up():
     """A flag no template uses is a flag nobody runs."""
     with open(WORKFLOW, "r", encoding="utf-8") as handle:

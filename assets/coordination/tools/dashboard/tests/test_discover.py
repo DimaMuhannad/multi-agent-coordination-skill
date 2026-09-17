@@ -344,6 +344,7 @@ def test_cli_on_a_missing_directory_does_not_fail_the_caller(tmp_path, capsys):
 # Against this repository
 # ---------------------------------------------------------------------------------------
 
+@pytest.mark.skill_repo
 def test_discovery_of_this_repository(capsys):
     """The one repository we can always guarantee exists."""
     report = discover_cli.discover(_REPO_ROOT)

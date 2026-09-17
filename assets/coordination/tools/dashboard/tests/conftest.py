@@ -16,6 +16,81 @@ if str(DASHBOARD_ROOT) not in sys.path:
 if str(DASHBOARD_ROOT.parent) not in sys.path:
     sys.path.insert(0, str(DASHBOARD_ROOT.parent))
 
+# This directory too, so a test module can `from conftest import shipped_hook`. pytest imports
+# conftest by path without putting it on sys.path, and the alternative to one shared helper is
+# the same path-resolution logic copied into three files -- which is the duplication this
+# project spends most of its time removing.
+_TESTS_DIR = Path(__file__).resolve().parent
+if str(_TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_TESTS_DIR))
+
+
+# ---------------------------------------------------------------------------------------
+# This suite ships into consumer projects, and it runs in two different trees
+# ---------------------------------------------------------------------------------------
+#
+# In the skill repository the files sit under `assets/`, where the hooks are staged as
+# `dot-claude/hooks/` and the instruction files as `*.template`. The installer renames both
+# on the way in, so an installed project has `.claude/hooks/` and filled-in files, and every
+# path written for the staging layout resolves to nothing.
+#
+# That was issue #54: 41 of 334 tests failed on a clean installation, for a reason that had
+# nothing to do with the project. A permanently red suite is worse than no suite -- it stops
+# answering the question an update pass actually asks, which is "did I break something".
+#
+# Two different problems, so two different answers:
+#
+#   * The hook tests are worth keeping in a consumer project -- those hooks ARE installed and
+#     do run there. They get a resolver, below.
+#   * Tests of the skill repository's own layout (templates, `git ls-files assets/`, the
+#     staging directory itself) cannot mean anything in a project that has none of it. They
+#     are marked `skill_repo` and skipped where that layout is absent, the way `streamlit`
+#     already marks the tests that need an optional dependency.
+
+#: `assets/` in the skill repository; the project root in an installed project.
+SCAFFOLD_ROOT = Path(__file__).resolve().parents[4]
+
+#: True in the skill repository, where the pre-install staging layout exists.
+IN_SKILL_REPO = (SCAFFOLD_ROOT / "dot-claude").is_dir()
+
+
+def shipped_hook(name: str) -> Path:
+    """Locate a hook in whichever of the two layouts this tree is.
+
+    Installed layout wins when both exist, because a project that vendored the skill inside
+    itself should still be testing the hook it actually runs.
+    """
+    installed = SCAFFOLD_ROOT / ".claude" / "hooks" / name
+    if installed.exists():
+        return installed
+    return SCAFFOLD_ROOT / "dot-claude" / "hooks" / name
+
+
+def pytest_configure(config):
+    # Registered here rather than in pytest.ini, because pytest.ini lives at the skill repo
+    # root and deliberately does NOT ship -- so in a consumer project every marked test
+    # raised PytestUnknownMarkWarning. `streamlit` is registered for the same reason; it had
+    # been warning in installed projects since it was introduced.
+    config.addinivalue_line(
+        "markers",
+        "skill_repo: needs the skill repository's own pre-install layout (assets/, "
+        "dot-claude/, *.template); skipped in an installed project",
+    )
+    config.addinivalue_line(
+        "markers",
+        "streamlit: requires streamlit to be installed (UI layer; skipped otherwise)",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    if IN_SKILL_REPO:
+        return
+    skip = pytest.mark.skip(
+        reason="needs the skill repo's pre-install layout; this tree is an installed project")
+    for item in items:
+        if "skill_repo" in item.keywords:
+            item.add_marker(skip)
+
 
 
 

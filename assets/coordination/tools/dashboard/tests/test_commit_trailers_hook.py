@@ -15,9 +15,10 @@ from pathlib import Path
 
 import pytest
 
-HOOK = (
-    Path(__file__).resolve().parents[4] / "dot-claude" / "hooks" / "check-commit-trailers.py"
-)
+from conftest import shipped_hook  # noqa: E402
+
+#: See test_budget_hook.py: resolved for both layouts, per #54.
+HOOK = shipped_hook("check-commit-trailers.py")
 
 GOOD_MESSAGE = "[A] a good commit\n\nBody text.\n\nSession: A\nReason: because\n"
 
