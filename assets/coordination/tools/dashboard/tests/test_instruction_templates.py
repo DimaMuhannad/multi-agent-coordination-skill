@@ -10,6 +10,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
+
 _ASSETS_DIR = Path(__file__).resolve().parents[4]
 AGENTS = _ASSETS_DIR / "AGENTS.md.template"
 CLAUDE = _ASSETS_DIR / "CLAUDE.md.template"
@@ -22,18 +24,21 @@ def _read(path):
         return handle.read()
 
 
+@pytest.mark.skill_repo
 def test_claude_template_imports_agents_on_its_first_line():
     """The import must not sit inside a code span or fence, where it is not parsed."""
     first = _read(CLAUDE).splitlines()[0].strip()
     assert first == "@AGENTS.md"
 
 
+@pytest.mark.skill_repo
 def test_both_templates_are_within_the_documented_line_target():
     """Claude Code targets under 200 lines per instruction file, and both load at launch."""
     for path in (AGENTS, CLAUDE):
         assert len(_read(path).splitlines()) <= LINE_TARGET, path.name
 
 
+@pytest.mark.skill_repo
 def test_claude_only_commands_stay_out_of_the_vendor_neutral_file():
     """A `claude` invocation in AGENTS.md is an instruction other agents cannot follow."""
     agents = _read(AGENTS)
@@ -41,12 +46,14 @@ def test_claude_only_commands_stay_out_of_the_vendor_neutral_file():
         assert token not in agents, "%r belongs in CLAUDE.md.template" % token
 
 
+@pytest.mark.skill_repo
 def test_claude_template_carries_the_tool_specific_half():
     claude = _read(CLAUDE)
     for token in ("claude agents --json", ".claude/rules", "COORDINATION_ROLE"):
         assert token in claude
 
 
+@pytest.mark.skill_repo
 def test_templates_have_no_control_bytes_and_are_lf_only():
     for path in (AGENTS, CLAUDE):
         raw = _read(path)
@@ -70,6 +77,7 @@ def _shipped_files():
     return [_ASSETS_DIR.parent / name for name in listed]
 
 
+@pytest.mark.skill_repo
 def test_no_shipped_file_points_at_the_skills_references_as_if_local():
     """`references/` stays in the skill; `assets/` is what lands in a project.
 
@@ -96,6 +104,7 @@ def test_no_shipped_file_points_at_the_skills_references_as_if_local():
     )
 
 
+@pytest.mark.skill_repo
 def test_every_shipped_writer_pins_the_line_ending():
     """A generated tree must not change shape with the platform that generated it.
 
@@ -216,6 +225,7 @@ def test_the_package_namespace_carries_only_the_promised_surface():
             "%s is re-exported from coordlib/__init__.py; it is internal" % internal_name)
 
 
+@pytest.mark.skill_repo
 def test_the_contract_names_the_modules_it_promises():
     contract = _read(_CONTRACT)
     for name in PROMISED_MODULES:

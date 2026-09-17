@@ -100,6 +100,7 @@ def test_inline_list_form_is_parsed(tmp_path):
     assert patterns == ["src/**", "lib/**"]
 
 
+@pytest.mark.skill_repo
 def test_shipped_example_rule_is_valid():
     """The scaffold must satisfy the checker it ships.
 

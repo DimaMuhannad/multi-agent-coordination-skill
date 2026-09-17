@@ -13,9 +13,11 @@ from pathlib import Path
 
 import pytest
 
-HOOK = (
-    Path(__file__).resolve().parents[4] / "dot-claude" / "hooks" / "check-context-budget.py"
-)
+from conftest import shipped_hook  # noqa: E402
+
+#: Resolved rather than hardcoded: this file ships into consumer projects, where the hook
+#: lives at `.claude/hooks/` and not at the skill repo's `dot-claude/` staging path (#54).
+HOOK = shipped_hook("check-context-budget.py")
 
 
 def _run(cwd, stdin_text="", *args):
@@ -220,3 +222,34 @@ def test_line_limit_within_budget_is_silent(project):
 
     result = _run(project, '{"source":"startup"}', "--json", "--force")
     assert json.loads(result.stdout)["oversized"] == []
+
+
+# ---------------------------------------------------------------------------------------
+# The resolver itself (#54)
+# ---------------------------------------------------------------------------------------
+
+def test_the_hook_this_suite_tests_actually_exists():
+    """Whichever tree this is, the constant must point at a real file.
+
+    Trivial-looking, and it is the assertion that was missing: in an installed project this
+    path pointed into `dot-claude/`, which the installer renames away, so 29 tests failed on
+    a file-not-found that had nothing to do with the hook.
+    """
+    assert HOOK.is_file(), HOOK
+
+
+def test_the_resolver_prefers_the_installed_layout(tmp_path, monkeypatch):
+    """Both layouts in one tree -- a project that vendored the skill inside itself -- must
+    resolve to the hook the project actually runs, not the staging copy."""
+    import conftest
+
+    (tmp_path / ".claude" / "hooks").mkdir(parents=True)
+    (tmp_path / "dot-claude" / "hooks").mkdir(parents=True)
+    for layout in (".claude", "dot-claude"):
+        (tmp_path / layout / "hooks" / "x.py").write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(conftest, "SCAFFOLD_ROOT", tmp_path)
+    assert conftest.shipped_hook("x.py") == tmp_path / ".claude" / "hooks" / "x.py"
+
+    (tmp_path / ".claude" / "hooks" / "x.py").unlink()
+    assert conftest.shipped_hook("x.py") == tmp_path / "dot-claude" / "hooks" / "x.py"

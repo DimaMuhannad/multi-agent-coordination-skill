@@ -28,7 +28,10 @@ import ownership as ownership_cli  # noqa: E402
 from coordlib import diagnostics as diag  # noqa: E402
 from coordlib.ownership import matches, owner_of, parse_ownership  # noqa: E402
 
-HOOK = _ASSETS_DIR / "dot-claude" / "hooks" / "check-path-ownership.py"
+from conftest import shipped_hook  # noqa: E402
+
+#: See test_budget_hook.py: resolved for both layouts, per #54.
+HOOK = shipped_hook("check-path-ownership.py")
 SHIPPED_MATRIX = _ASSETS_DIR / "coordination" / "OWNERSHIP.md"
 
 MATRIX = """# OWNERSHIP
