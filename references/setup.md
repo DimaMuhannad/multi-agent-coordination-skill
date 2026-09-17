@@ -127,7 +127,7 @@ it does, don't overwrite existing hooks):
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/check-context-budget.py"
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-context-budget.py\""
           }
         ]
       }
@@ -135,6 +135,19 @@ it does, don't overwrite existing hooks):
   }
 }
 ```
+
+**`$CLAUDE_PROJECT_DIR` is load-bearing, not tidy quoting.** A relative command resolves
+against the **tool call's** working directory, not the project root. The first time a session
+runs something that begins `cd coordination/tools && …`, the hook's path no longer exists and
+the hook stops running. For this one that means a missed warning. For the two *barrier* hooks
+in §9 it means the barrier is not there — and the condition that removes it is a completely
+ordinary `cd`, invisible in the transcript. Reported live in
+[#56](https://github.com/DimaMuhannad/multi-agent-coordination-skill/issues/56), where a
+project's production-write guard disappeared exactly this way; the failure there happened to
+surface as an error, but nothing promises that a harness treats "hook crashed" as "stop".
+
+Anchoring it is what makes `CHARTER.md §4`'s claim true — *a rule enforced by a hook stays
+true* — for a hook whose presence would otherwise depend on the caller's current directory.
 
 Verify it actually fires and warns correctly before trusting it — write a `roles/TEST.md` file
 larger than the configured `limit_bytes`, then feed the hook synthetic stdin matching what
@@ -390,7 +403,7 @@ Copy it to `.claude/hooks/` and register it:
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/check-path-ownership.py"
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-path-ownership.py\""
           }
         ]
       }
@@ -440,7 +453,7 @@ on `PostToolUse`:
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/check-commit-trailers.py",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-commit-trailers.py\"",
             "timeout": 15
           }
         ]

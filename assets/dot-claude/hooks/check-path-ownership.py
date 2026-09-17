@@ -11,6 +11,11 @@ Configure the session's identity through the environment; the hook is inert with
 
     COORDINATION_ROLE=frontend claude
 
+Register it with the path anchored to the project -- `"$CLAUDE_PROJECT_DIR/.claude/hooks/..."`,
+see the skill's references/setup.md §9. A relative path resolves against the tool call's working
+directory, so one `cd` into a subdirectory and this barrier silently stops running (issue #56).
+A barrier whose presence depends on the caller's cwd is not a barrier.
+
 Deliberate design choices, each one a decision not to be clever:
 
   * Unset role, missing OWNERSHIP.md, unparseable matrix, unexpected payload, any exception
