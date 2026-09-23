@@ -449,6 +449,37 @@ def test_shipped_matrix_claims_the_coordination_directory():
     assert zone is not None and zone.owner == "ORCH"
 
 
+@pytest.mark.skill_repo
+@pytest.mark.parametrize("path", [
+    ".claude/settings.json",
+    ".claude/settings.local.json",
+    ".claude/hooks/check-path-ownership.py",
+    "AGENTS.md",
+])
+def test_shipped_matrix_owns_the_barrier_files(path):
+    """#67: with no row for them, any role could edit the hook that stops it."""
+    zone = owner_of(path, parse_ownership(SHIPPED_MATRIX))
+    assert zone is not None and zone.owner == "ORCH", path
+
+
+@pytest.mark.skill_repo
+@pytest.mark.parametrize("path", [".claude/rules/pipeline.md", ".claude/worktrees/a/src/core/x.py"])
+def test_the_barrier_row_does_not_claim_the_rest_of_dot_claude(path):
+    """The narrow form on purpose: `.claude/**` would hand rules and native worktrees to ORCH."""
+    zone = owner_of(path, parse_ownership(SHIPPED_MATRIX))
+    assert zone is None or zone.owner != "ORCH", (path, zone)
+
+
+@pytest.mark.skill_repo
+def test_shipped_matrix_pattern_set():
+    """Every rule the template ships, so a reworded cell cannot add or lose one unnoticed."""
+    assert {z.pattern for z in parse_ownership(SHIPPED_MATRIX)} == {
+        "src/core/**", "coordination/**", "CLAUDE.md", "AGENTS.md",
+        ".claude/hooks/**", ".claude/settings.json", ".claude/settings.local.json",
+        "coordination/rationale/**", "archive/**",
+    }
+
+
 def test_control_character_diagnostic_points_at_the_real_line(tmp_path):
     """A jump target that is wrong is worse than no jump target.
 
