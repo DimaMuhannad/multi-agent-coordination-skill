@@ -11,7 +11,9 @@ the reverse -- is worse than either alone, so the matching lives here once.
 
 Template rows are skipped rather than obeyed. `OWNERSHIP.md` ships with example rows whose
 owner is `\\<ID\\>`; treating those as real would hand every path to a role that does not
-exist.
+exist. Any other row that yields no rule is reported when the caller collects diagnostics
+(`unenforceable-row`, `multi-owner-cell`): to a person it reads as a rule, and nothing enforces
+it (#66).
 
 STABILITY: INTERNAL. Read the matrix through this module, not around it. Nothing outside this package should depend on the
 names or shapes here; they may change without notice. See the skill's
@@ -42,6 +44,19 @@ _CODE_SPAN = re.compile(r"`([^`]+)`")
 
 #: A `<...>` placeholder anywhere in a cell, escaped or not.
 _INLINE_PLACEHOLDER = re.compile(r"\\?<[^>]*\\?>")
+
+#: The narrower test used only to decide whether a row that yields no rule is still template.
+#: `_INLINE_PLACEHOLDER` also matches `<br>`, `<!-- ... -->` and `<https://...>`, so reusing it
+#: would keep `A<br>B` -- the multi-owner defect in its most common GitHub spelling -- silent.
+#: The shipped template writes its placeholders as upper-case `<ID>` / `\\<ID\\>` only.
+_TEMPLATE_PLACEHOLDER = re.compile(r"\\?<[A-Z][A-Z0-9_ -]*\\?>")
+
+#: What a bare role id looks like. Anything with spaces or punctuation is prose.
+_BARE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+#: How people write two owners in one cell: `A / B`, `A, B`, `A & B`, `A + B`, `A; B`,
+#: `A<br>B`, `A and B`.
+_OWNER_SEPARATORS = re.compile(r"\s*(?:/|,|&|\+|;|<br\s*/?>|\band\b)\s*", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -145,7 +160,7 @@ def _clean_owner(cell: str) -> str:
     if schema.is_placeholder_text(text):
         return ""
     # Anything with punctuation or spaces is prose, not an id.
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", text):
+    if not _BARE_ID.fullmatch(text):
         return ""
     return text
 
@@ -165,12 +180,67 @@ def _patterns_in(cell: str) -> List[str]:
     return found
 
 
+def _split_owners(cell: str) -> List[str]:
+    """The role ids in an Owner cell that names several, or [] when it is not that shape.
+
+    Every part must be a bare id: `arch, see the notes` is prose with an id in it, not two
+    owners, and is reported as an ordinary unenforceable row.
+    """
+    parts = [schema.strip_decoration(p) for p in _OWNER_SEPARATORS.split(cell.strip())]
+    parts = [p for p in parts if p]
+    if len(parts) < 2 or not all(_BARE_ID.fullmatch(p) for p in parts):
+        return []
+    return parts
+
+
+def _report_row_without_rule(diagnostics, path, line, path_cell, owner_cell, owner) -> None:
+    """Record why a non-template row produced no zone. Template rows stay silent."""
+    if _TEMPLATE_PLACEHOLDER.search(path_cell) or _TEMPLATE_PLACEHOLDER.search(owner_cell):
+        return
+    if not owner:
+        if _split_owners(owner_cell):
+            diag.record(
+                diagnostics,
+                diag.MULTI_OWNER_CELL,
+                path,
+                line=line,
+                detail="a path has exactly one owner; split this row into one row per owner",
+                observed=owner_cell.strip(),
+            )
+            return
+        diag.record(
+            diagnostics,
+            diag.UNENFORCEABLE_ROW,
+            path,
+            line=line,
+            detail=("Owner cell is empty" if not owner_cell.strip()
+                    else "Owner cell is not a bare role id") + ", so this row is not enforced",
+            observed=owner_cell.strip(),
+        )
+        return
+    diag.record(
+        diagnostics,
+        diag.UNENFORCEABLE_ROW,
+        path,
+        line=line,
+        detail="Path cell has no leading `code span` glob, so this row is not enforced",
+        observed=path_cell.strip(),
+    )
+
+
 def parse_ownership(file_path, *, diagnostics=None) -> List[Zone]:
     """Read every actionable zone from an OWNERSHIP.md.
 
     Rows whose owner or path is still a template placeholder are skipped silently -- the
     shipped template is meant to ship with them, so reporting each one as a defect would
-    make a clean scaffold look broken.
+    make a clean scaffold look broken. Any other row that yields no rule is reported to
+    `diagnostics`: a row that reads as a rule and enforces nothing is exactly the silence
+    #66 found three times in one live matrix.
+
+    Two things are deliberately NOT reported. Commentary after the leading code spans is
+    ignored by design (see `_LEADING_SPANS`). And a Path cell whose leading spans are split
+    by something other than a comma -- `` `a/**`<br>`b/**` `` -- keeps only `a/**`; that
+    partial loss is a known gap, not handled here.
     """
     path = Path(file_path)
     if not path.is_file():
@@ -219,10 +289,18 @@ def parse_ownership(file_path, *, diagnostics=None) -> List[Zone]:
                 )
                 continue
             owner = _clean_owner(cells[owner_col])
+            patterns = _patterns_in(cells[path_col]) if owner else []
+            # Only a caller that collects diagnostics pays for classifying the row. The write
+            # barrier parses with no sink and allows every write on any exception, so a bug
+            # here -- or a partial upgrade that brought this file without the new codes --
+            # must not be able to reach its path and switch the barrier off.
+            if diagnostics is not None and not patterns:
+                _report_row_without_rule(
+                    diagnostics, path, index + 1, cells[path_col], cells[owner_col], owner)
             if not owner:
                 continue
             others = cells[others_col] if others_col is not None and others_col < len(cells) else ""
-            for pattern in _patterns_in(cells[path_col]):
+            for pattern in patterns:
                 zones.append(
                     Zone(pattern=pattern, owner=owner, others=others.strip(), line=index + 1)
                 )
