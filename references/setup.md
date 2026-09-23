@@ -421,6 +421,19 @@ Copy it to `.claude/hooks/` and register it:
 
 Then give each session its role: `COORDINATION_ROLE=<ID> claude`.
 
+**A hook registration is read when a session starts.** Adding or changing one in
+`settings.json` does not reach a session that is already running; check it from a fresh session
+or with `/hooks`. The synthetic-input check below tests the script, not the registration.
+
+**Own the barrier, and each role's own file.** The shipped matrix gives `.claude/hooks/**`,
+`.claude/settings.json` and `.claude/settings.local.json` to ORCH, so another role cannot edit
+the hook that stops it. An `OWNERSHIP.md` installed before that row existed does not get it on
+upgrade — it is the project's file, and `upgrade.py` never touches or reports it — so add the
+row by hand, and regenerate `.github/CODEOWNERS` in the same commit or `--check` goes red (§6).
+The `coordination/roles/<ID>.md` row is a template row and enforces nothing, so the general
+`coordination/**` row denies every role but ORCH its own file; when you enable this hook, add
+one row per role, e.g. `` | `coordination/roles/B.md` | B | read | ``.
+
 **Without that variable the hook does nothing at all.** That is deliberate — a coordination
 aid that halts real work when it is misconfigured gets deleted within a day — but it does mean
 a silent no-op is the failure mode, so verify once with synthetic input the same way §2
@@ -435,8 +448,8 @@ You should get back a JSON object with `"permissionDecision": "deny"`. Nothing p
 the hook is inert — usually a missing `OWNERSHIP.md`, a matrix that still has only template
 rows, or `coordination/tools/coordlib/` not copied across.
 
-**What it does not cover, stated plainly.** It inspects file-writing tools only. A `Bash`
-command that writes is *not* caught: deciding whether `make build` lands in someone else's
+**What it does not cover, stated plainly.** It inspects file-writing tools only. A shell
+tool that writes — `Bash`, or any other your harness provides — is *not* caught: deciding whether `make build` lands in someone else's
 zone means predicting a shell, and a check that is right most of the time invites exactly the
 misplaced confidence the hook exists to remove. For paths that must never be touched at all,
 use `permissions.deny`. And it governs the sessions that run it — a teammate on another
@@ -481,6 +494,9 @@ echo '{"tool_name":"Bash","cwd":"'"$PWD"'","tool_input":{"command":"git commit"}
 A well-formed commit prints nothing; a broken one gives back `"decision": "block"` with the
 reason, which the session sees and fixes with `git commit --amend`. The commit is not undone —
 `PostToolUse` runs after the fact, so this is feedback, not a barrier.
+
+It reacts to `tool_name` `Bash` only, so a commit made through any other shell tool gets no
+feedback.
 
 Note that this hook *does* key on `Bash`, which the ownership hook above refuses to do. The
 difference is prediction: the ownership hook would have to guess, beforehand, where a shell
