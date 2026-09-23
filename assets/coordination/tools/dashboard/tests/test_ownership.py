@@ -115,6 +115,95 @@ def test_absent_file_is_not_an_error(tmp_path):
 
 
 # ---------------------------------------------------------------------------------------
+# Rows that read as rules and enforce nothing (#66)
+# ---------------------------------------------------------------------------------------
+
+#: The reporter's reproduction, verbatim: one good row, one with two owners, one template row.
+ISSUE_66_MATRIX = """| Path | Owner | Others | Notes |
+| :--- | :--- | :--- | :--- |
+| `src/a/**` | `arch` | read | fine |
+| `docs/**` | `arch` / `optics` | read | two owners |
+| `coordination/roles/<ID>.md` | `<ID>` | read | placeholder |
+"""
+
+
+def _parse_text(tmp_path, text):
+    path = tmp_path / "OWNERSHIP.md"
+    with open(path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
+    sink = diag.DiagnosticList()
+    return parse_ownership(path, diagnostics=sink), sink
+
+
+def test_issue66_reproduction(tmp_path):
+    """Two rows gone, exit 0, no word: the two-owner row is now named, the template row is not."""
+    zones, sink = _parse_text(tmp_path, ISSUE_66_MATRIX)
+    assert [(z.pattern, z.owner) for z in zones] == [("src/a/**", "arch")]
+    found = list(sink)
+    assert [item.code for item in found] == [diag.MULTI_OWNER_CELL], [str(i) for i in found]
+    assert found[0].line == 4
+    assert "optics" in found[0].observed
+
+
+def test_a_row_without_a_rule_is_reported_with_the_cell_that_failed(tmp_path):
+    zones, sink = _parse_text(tmp_path, (
+        "| Path | Owner |\n|---|---|\n"
+        "| docs/** | arch |\n"
+        "| `results/**` | whoever computed it |\n"
+    ))
+    assert zones == []
+    found = sorted(sink, key=lambda item: item.line)
+    assert [(item.code, item.line) for item in found] == [
+        (diag.UNENFORCEABLE_ROW, 3), (diag.UNENFORCEABLE_ROW, 4)]
+    assert found[0].observed == "docs/**" and "Path cell" in found[0].detail
+    assert found[1].observed == "whoever computed it" and "Owner cell" in found[1].detail
+
+
+def test_br_separated_owners_are_a_multi_owner_cell(tmp_path):
+    """`<br>` looks like a placeholder to the broad `<...>` test; it must not hide the defect."""
+    _, sink = _parse_text(tmp_path, "| Path | Owner |\n|---|---|\n| `x/**` | A<br>B |\n")
+    assert sink.codes() == {diag.MULTI_OWNER_CELL}
+
+
+def test_an_empty_owner_cell_is_reported(tmp_path):
+    _, sink = _parse_text(tmp_path, "| Path | Owner |\n|---|---|\n| `x/**` |  |\n")
+    assert sink.codes() == {diag.UNENFORCEABLE_ROW}
+    assert "empty" in next(iter(sink)).detail
+
+
+def test_template_rows_stay_silent(matrix):
+    """A freshly installed matrix must not look broken: `\\<ID\\>` rows are template, not defects."""
+    sink = diag.DiagnosticList()
+    parse_ownership(matrix, diagnostics=sink)
+    assert list(sink) == [], [str(item) for item in sink]
+
+
+def test_reporting_does_not_change_the_zones(tmp_path):
+    """The hook parses with no sink. Whatever is reported, the rules it enforces are the same."""
+    zones, _ = _parse_text(tmp_path, ISSUE_66_MATRIX)
+    assert parse_ownership(tmp_path / "OWNERSHIP.md") == zones
+
+
+def test_strict_is_what_turns_an_unreadable_row_into_a_failure(tmp_path):
+    """Without --strict the exit codes are exactly what they were: installed CI must not go red."""
+    coord = tmp_path / "coordination"
+    coord.mkdir()
+    with open(coord / "OWNERSHIP.md", "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(ISSUE_66_MATRIX)
+    target = tmp_path / "CODEOWNERS"
+    base = ["--coordination-dir", str(coord), "--map", "arch=@a"]
+
+    assert ownership_cli.main(base + ["-o", str(target)]) == 0
+    assert ownership_cli.main(base + ["--check", "-o", str(target)]) == 0
+    assert ownership_cli.main(base + ["--check", "--strict", "-o", str(target)]) == 1
+
+    with open(coord / "OWNERSHIP.md", "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(ISSUE_66_MATRIX.replace("`arch` / `optics`", "`arch`"))
+    assert ownership_cli.main(base + ["-o", str(target)]) == 0
+    assert ownership_cli.main(base + ["--check", "--strict", "-o", str(target)]) == 0
+
+
+# ---------------------------------------------------------------------------------------
 # Matching
 # ---------------------------------------------------------------------------------------
 
@@ -318,6 +407,15 @@ def test_hook_allows_a_write_outside_the_project(project, tmp_path):
     assert _decision(_run_hook(project, payload, "frontend")) is None
 
 
+def test_hook_still_denies_with_an_unenforceable_row_in_the_matrix(project):
+    """The hook parses with no sink and allows on any exception, so the new classification
+    must never run on its path. A matrix carrying a defective row still blocks."""
+    with open(project / "coordination" / "OWNERSHIP.md", "a", encoding="utf-8", newline="\n") as fh:
+        fh.write("| `shared/**` | `arch` / `optics` | read |\n")
+    result = _run_hook(project, _edit(project, "coordination/BOARD.md"), role="frontend")
+    assert _decision(result) == "deny", result.stdout + result.stderr
+
+
 def test_hook_is_inert_without_coordlib(tmp_path):
     """A project with a matrix but no tools/ must degrade to allow, not crash."""
     root = tmp_path / "bare"
@@ -333,6 +431,11 @@ def test_hook_is_inert_without_coordlib(tmp_path):
 # The shipped template must satisfy its own parser
 # ---------------------------------------------------------------------------------------
 
+#: Skill repository only. In an installed project SHIPPED_MATRIX resolves to the consumer's own,
+#: filled-in OWNERSHIP.md, and since #66 a row whose owner is written as a rule -- which the
+#: template itself advises for convention-owned directories -- is reported. That is a finding
+#: for `ownership.py --strict`, which a project opts into, not a reason for its suite to fail.
+@pytest.mark.skill_repo
 def test_shipped_matrix_parses_without_diagnostics():
     sink = diag.DiagnosticList()
     parse_ownership(SHIPPED_MATRIX, diagnostics=sink)

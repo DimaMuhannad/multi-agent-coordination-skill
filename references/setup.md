@@ -299,6 +299,13 @@ Only do this once `references/git-github-rails.md` §"when this earns its place"
    Add `python3 coordination/tools/ownership.py --map-file owners.json --check` to CI: it exits
    1 when `.github/CODEOWNERS` has drifted from `OWNERSHIP.md`.
 
+   A row the tool cannot turn into a rule — two owners in one cell (`` `arch` / `optics` ``), a
+   path without backticks, an owner written as prose — is printed as a `WARN` naming the line,
+   because it reads to a person as a rule and nothing enforces it. Template rows (`<ID>`) stay
+   silent. The `WARN` does not change the exit code unless you add `--strict`; add it once the
+   matrix is filled in and every remaining owner-as-a-rule row is one you meant to leave
+   unenforced.
+
    `assets/dot-github/CODEOWNERS.template` stays as the hand-written fallback and as
    documentation of what the output means.
 
@@ -568,6 +575,7 @@ non-zero only on a real disagreement:
 
 ```bash
 python3 coordination/tools/ownership.py --map-file owners.json --check   # CODEOWNERS vs OWNERSHIP.md
+                                          # add --strict to also fail on rows that enforce nothing (§6)
 python3 coordination/tools/check_rules.py --strict                       # .claude/rules globs
 python3 coordination/tools/upgrade.py --from <skill>/assets              # upstream drift
 ```

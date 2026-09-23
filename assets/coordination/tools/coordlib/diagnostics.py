@@ -37,6 +37,15 @@ MALFORMED_STATUS_LINE = "malformed-status-line"
 # File-level: the bytes themselves are damaged.
 CONTROL_CHARACTER = "control-character"
 DUPLICATE_ID = "duplicate-id"
+# Rule-level: a row was found and read, and still produced nothing the tools can enforce.
+#: An OWNERSHIP.md row that is not template-shaped and yet yields no zone: its Owner cell is
+#: not a bare role id, or its Path cell has no leading code-span glob. It reads to a person as
+#: an active rule, and neither the ownership hook nor CODEOWNERS enforces it. One live project
+#: carried three such rows for months with no word from any tool (#66).
+UNENFORCEABLE_ROW = "unenforceable-row"
+#: The case of the above whose remedy is mechanical: an Owner cell naming two or more role
+#: ids. A path has exactly one owner in this model, so the row has to be split.
+MULTI_OWNER_CELL = "multi-owner-cell"
 
 #: Codes that mean the tool could not reliably locate rows in a file. A file carrying any of
 #: these must be treated as read-only by anything that writes: a tool that cannot read a file

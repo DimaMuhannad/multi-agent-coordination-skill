@@ -35,7 +35,9 @@ from .diagnostics import (
     MALFORMED_STATUS_LINE,
     MISSING_STATUS,
     MISSING_TYPE_COLUMN,
+    MULTI_OWNER_CELL,
     NO_HEADER_ROW,
+    UNENFORCEABLE_ROW,
     UNKNOWN_STATUS,
     UNKNOWN_TABLE_SCHEMA,
     UNKNOWN_TYPE,
@@ -93,6 +95,8 @@ __all__ = [
     "COLUMN_COUNT_MISMATCH",
     "CONTROL_CHARACTER",
     "DUPLICATE_ID",
+    "UNENFORCEABLE_ROW",
+    "MULTI_OWNER_CELL",
     # md_table -- promised (three of them; the module itself is PARTIAL)
     "split_table_row",
     "unescape_pipe",

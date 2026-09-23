@@ -15,6 +15,11 @@ Reading is the default and writing is opt-in (`--output`), matching the invarian
     python3 coordination/tools/ownership.py --map-file coordination/tools/owners.json \
         --output .github/CODEOWNERS
     python3 coordination/tools/ownership.py --map-file owners.json --check   # CI drift gate
+
+Rows the parser could not turn into a rule are always printed as WARN. They change the exit
+code only under `--strict`, the same opt-in `check_rules.py` and `upgrade.py` use: the shipped
+matrix itself advises writing some owners as a rule rather than an id, and a project that took
+that advice must not go red on upgrade.
 """
 
 import argparse
@@ -123,6 +128,9 @@ def main(argv=None):
     parser.add_argument("--check", action="store_true",
                         help="compare against --output (or .github/CODEOWNERS) and exit 1 on drift")
     parser.add_argument("--json", action="store_true", help="emit the parsed zones as JSON")
+    parser.add_argument("--strict", action="store_true",
+                        help="also exit 1 when OWNERSHIP.md has anything the parser could not "
+                             "read (every WARN line)")
     args = parser.parse_args(argv)
 
     if args.coordination_dir:
@@ -137,6 +145,12 @@ def main(argv=None):
     zones = parse_ownership(coord_dir / "OWNERSHIP.md", diagnostics=sink)
     for item in sink:
         print("WARN %s" % item, file=sys.stderr)
+    # The exit status of every path that would otherwise succeed.
+    ok = 0
+    if args.strict and sink:
+        print("ownership: --strict: %d thing(s) in OWNERSHIP.md could not be read (WARN above)"
+              % len(sink), file=sys.stderr)
+        ok = 1
 
     try:
         mapping = load_map(args.map_file, args.map)
@@ -150,11 +164,17 @@ def main(argv=None):
               "codeowners": to_codeowners_pattern(z.pattern),
               "handle": handle_for(z.owner, mapping)} for z in zones],
             indent=2, ensure_ascii=False))
-        return 0
+        return ok
 
     if not zones:
-        print("ownership: OWNERSHIP.md has no actionable zones yet (only template rows)",
-              file=sys.stderr)
+        unread = sum(1 for item in sink
+                     if item.code in (diag.UNENFORCEABLE_ROW, diag.MULTI_OWNER_CELL))
+        if unread:
+            print("ownership: OWNERSHIP.md has no actionable zones; %d row(s) could not be read "
+                  "as rules (see WARN above)" % unread, file=sys.stderr)
+        else:
+            print("ownership: OWNERSHIP.md has no actionable zones yet (only template rows)",
+                  file=sys.stderr)
 
     text = render(zones, mapping)
 
@@ -169,7 +189,7 @@ def main(argv=None):
             current = handle.read()
         if current == text:
             print("ownership: %s matches OWNERSHIP.md" % target)
-            return 0
+            return ok
         print("ownership: %s has drifted from OWNERSHIP.md; regenerate it" % target,
               file=sys.stderr)
         return 1
@@ -180,10 +200,10 @@ def main(argv=None):
         with open(target, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(text)
         print("ownership: wrote %s (%d zones)" % (target, len(zones)))
-        return 0
+        return ok
 
     sys.stdout.write(text)
-    return 0
+    return ok
 
 
 if __name__ == "__main__":
