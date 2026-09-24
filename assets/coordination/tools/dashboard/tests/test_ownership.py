@@ -391,6 +391,40 @@ def test_hook_keeps_the_plain_reason_for_a_real_foreign_role(project):
     assert "owns no zone" not in reason
 
 
+_SHIPPED_HOOKS = ("check-path-ownership.py", "check-context-budget.py", "check-commit-trailers.py")
+
+
+def _run_with_python(hook, root, payload, role):
+    env = dict(os.environ, COORDINATION_ROLE=role)
+    env.pop("COORDINATION_ROLE_ID", None)
+    return subprocess.run(
+        [sys.executable, "-B", str(hook)],
+        cwd=str(root), input=json.dumps(payload), capture_output=True, text=True, env=env,
+    )
+
+
+@pytest.mark.parametrize("name", _SHIPPED_HOOKS)
+def test_shipped_hooks_behave_the_same_from_a_crlf_checkout(project, tmp_path, name):
+    """Issue #76: a Windows checkout with `core.autocrlf=true` gives every hook CRLF endings.
+    That breaks a hook run through its shebang, but setup.md registers each one as
+    `python "<path>"`, and Python reads CRLF source unchanged. This pins that down: the same
+    input must give the same exit status and the same output from either copy."""
+    lf = shipped_hook(name)
+    crlf = tmp_path / "crlf" / name
+    crlf.parent.mkdir()
+    crlf.write_bytes(lf.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    assert b"\r\n" in crlf.read_bytes()
+
+    payload = _edit(project, "coordination/BOARD.md")
+    from_lf = _run_with_python(lf, project, payload, "frontend")
+    from_crlf = _run_with_python(crlf, project, payload, "frontend")
+
+    assert (from_crlf.returncode, from_crlf.stdout) == (from_lf.returncode, from_lf.stdout)
+    assert "SyntaxError" not in from_crlf.stderr, from_crlf.stderr
+    if name == "check-path-ownership.py":
+        assert _decision(from_crlf) == "deny"
+
+
 def test_hook_allows_the_owner(project):
     assert _decision(_run_hook(project, _edit(project, "coordination/BOARD.md"), "ORCH")) is None
 

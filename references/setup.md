@@ -136,6 +136,12 @@ it does, don't overwrite existing hooks):
 }
 ```
 
+**Keep the `python` in front.** Registering a hook as `./check-context-budget.py` runs it
+through its shebang, and on a Windows checkout with `core.autocrlf=true` that line ends in
+`\r`, so the interpreter it names does not exist and the hook silently stops running. Run by
+`python "<path>"`, CRLF makes no difference — a test runs each shipped hook from an LF and a CRLF copy to hold
+that (#76).
+
 **`$CLAUDE_PROJECT_DIR` is load-bearing, not tidy quoting.** A relative command resolves
 against the **tool call's** working directory, not the project root. The first time a session
 runs something that begins `cd coordination/tools && …`, the hook's path no longer exists and
