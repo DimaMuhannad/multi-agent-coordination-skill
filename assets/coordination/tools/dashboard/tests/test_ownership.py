@@ -370,6 +370,27 @@ def test_hook_denies_a_write_outside_the_session_zone(project):
     assert "ORCH" in reason and "coordination/**" in reason
 
 
+def _reason(result):
+    return json.loads(result.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_hook_names_a_role_that_owns_no_zone(project):
+    """Issue #65: `orch` for `ORCH` is still denied -- matching stays exact, no case folding --
+    but the reason says the role owns nothing, so the typo is visible, not a mystery wall."""
+    result = _run_hook(project, _edit(project, "coordination/BOARD.md"), role="orch")
+    assert _decision(result) == "deny"
+    reason = _reason(result)
+    assert "role `orch` owns no zone" in reason
+    assert "owners: B, ORCH, frontend" in reason
+    assert "COORDINATION_ROLE" in reason
+
+
+def test_hook_keeps_the_plain_reason_for_a_real_foreign_role(project):
+    """A role that does own a zone elsewhere is a genuine boundary, not a misconfiguration."""
+    reason = _reason(_run_hook(project, _edit(project, "coordination/BOARD.md"), "frontend"))
+    assert "owns no zone" not in reason
+
+
 def test_hook_allows_the_owner(project):
     assert _decision(_run_hook(project, _edit(project, "coordination/BOARD.md"), "ORCH")) is None
 

@@ -419,7 +419,20 @@ Copy it to `.claude/hooks/` and register it:
 }
 ```
 
-Then give each session its role: `COORDINATION_ROLE=<ID> claude`.
+Then give each session its role. From a terminal: `COORDINATION_ROLE=<ID> claude`. For a
+session started from the desktop or web app, where there is no command line to prefix, put it
+in that worktree's `.claude/settings.local.json`:
+
+```json
+{ "env": { "COORDINATION_ROLE": "<ID>" } }
+```
+
+That file is git-ignored and exists once per worktree, so parallel roles in separate worktrees
+do not see each other's value. Claude Code passes its `env` to hooks on every launch type —
+measured for issue #65 on cloud `claude -p` (Linux, Claude Code 2.1.280) and on Windows
+`claude -p`, interactive `claude` and the desktop app; an edit into another role's zone was
+denied in all four, and allowed in the control runs without the file. The ORCH row below
+covers this file too, so a session cannot rename its own role through Edit or Write.
 
 **A hook registration is read when a session starts.** Adding or changing one in
 `settings.json` does not reach a session that is already running; check it from a fresh session
@@ -434,17 +447,21 @@ The `coordination/roles/<ID>.md` row is a template row and enforces nothing, so 
 `coordination/**` row denies every role but ORCH its own file; when you enable this hook, add
 one row per role, e.g. `` | `coordination/roles/B.md` | B | read | ``.
 
-**Without that variable the hook does nothing at all.** That is deliberate — a coordination
-aid that halts real work when it is misconfigured gets deleted within a day — but it does mean
-a silent no-op is the failure mode, so verify once with synthetic input the same way §2
-verifies the budget hook:
+**With no role set, the hook allows every write, silently.** Every launch type can set one (see
+above), so an unset role is a setup gap, not a limit of the app. Staying silent is deliberate —
+a coordination aid that halts real work when it is misconfigured gets deleted within a day —
+but it does mean a silent no-op is the failure mode, so verify once with synthetic input the
+same way §2 verifies the budget hook:
 
 ```bash
 echo '{"tool_name":"Edit","cwd":"'"$PWD"'","tool_input":{"file_path":"'"$PWD"'/coordination/BOARD.md"}}' \
   | COORDINATION_ROLE=not-the-owner python .claude/hooks/check-path-ownership.py
 ```
 
-You should get back a JSON object with `"permissionDecision": "deny"`. Nothing printed means
+You should get back a JSON object with `"permissionDecision": "deny"`. Because
+`not-the-owner` owns no zone, the reason also says so and lists the matrix's owners — the same
+note a real session gets when its role is a typo such as `orch` for `ORCH`. Matching stays
+exact: the value is reported, never corrected. Nothing printed means
 the hook is inert — usually a missing `OWNERSHIP.md`, a matrix that still has only template
 rows, or `coordination/tools/coordlib/` not copied across.
 

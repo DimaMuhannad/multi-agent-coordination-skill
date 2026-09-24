@@ -7,9 +7,17 @@ configuration. To block an action regardless of what Claude decides, use a PreTo
 instead." OWNERSHIP.md was pure prose, so "work only in your own zone" held exactly as well
 as the model's attention did. This turns it into a real barrier.
 
-Configure the session's identity through the environment; the hook is inert without it:
+Configure the session's identity through the environment; the hook is inert without it.
+Either on the command line:
 
     COORDINATION_ROLE=frontend claude
+
+or, for a session started from the desktop or web app where there is no command line, in the
+worktree's own `.claude/settings.local.json` (git-ignored, one per worktree):
+
+    {"env": {"COORDINATION_ROLE": "frontend"}}
+
+Claude Code passes that `env` to hooks on every launch type (measured for issue #65).
 
 Register it with the path anchored to the project -- `"$CLAUDE_PROJECT_DIR/.claude/hooks/..."`,
 see the skill's references/setup.md §9. A relative path resolves against the tool call's working
@@ -29,7 +37,7 @@ Deliberate design choices, each one a decision not to be clever:
 
 Known limits, stated plainly because a barrier you trust wrongly is a hazard:
 
-  * `Bash` is not inspected. Deciding whether `make build` writes into someone else's zone
+  * The shell tool is not inspected. Deciding whether `make build` writes into someone else's zone
     means predicting a shell, and a check that is right most of the time invites exactly
     the misplaced confidence this hook exists to remove. Pair it with `permissions.deny`
     for the paths that genuinely must never be touched.
@@ -43,7 +51,7 @@ import os
 import subprocess
 import sys
 
-#: Tools whose input names a file this hook can resolve. `Bash` is deliberately absent.
+#: Tools whose input names a file this hook can resolve. The shell tool is deliberately absent.
 _PATH_KEYS = {
     "Edit": "file_path",
     "Write": "file_path",
@@ -190,7 +198,7 @@ def evaluate(payload, root=None, role=None):
     if zone is None or zone.owner == role:
         return None
 
-    return (
+    reason = (
         "OWNERSHIP.md:{line} gives `{pattern}` to {owner}; this session is {role}. "
         "Writing to {relative} would cross a zone boundary. Request the change through "
         "HANDOFFS.md, or take it up with {owner} directly.".format(
@@ -198,6 +206,16 @@ def evaluate(payload, root=None, role=None):
             role=role, relative=relative,
         )
     )
+    # A role that owns nothing is most often a typo (`orch` for `ORCH`). It is still denied
+    # -- matching stays exact, no case folding, no aliases -- but the value is reported as
+    # given so the misconfiguration is visible instead of looking like a real boundary.
+    owners = sorted({z.owner for z in zones})
+    if role not in owners:
+        reason += (
+            " Note: role `{role}` owns no zone in OWNERSHIP.md (owners: {owners}); "
+            "check COORDINATION_ROLE.".format(role=role, owners=", ".join(owners))
+        )
+    return reason
 
 
 def main():
