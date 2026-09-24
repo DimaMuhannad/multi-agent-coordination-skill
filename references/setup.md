@@ -473,6 +473,32 @@ use `permissions.deny`. And it governs the sessions that run it — a teammate o
 machine without the hook installed is unaffected, which is why the generated `CODEOWNERS` plus
 branch protection (§6) is the rail that catches that case.
 
+### Backup and scratch files: `permissions.deny`, not a hook
+
+Sessions about to make a risky edit tend to copy the file first — `app.backup_before_x.js`,
+`script.py.bak` — and leave the copies behind, where the next `git add .` commits them. Git is
+the checkpoint: a branch, a stash, or a scratch directory outside the tree. No hook is needed
+to hold that line, because Claude Code's own permission rules already do it, and a harness rule
+has no fail-open path the way a hook does. In `.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "deny": ["Edit(**/*.bak)", "Edit(**/*.backup*)", "Edit(**/*_copy.*)"]
+  }
+}
+```
+
+`Edit(...)` rules cover every built-in file-editing tool, so they also refuse creating such a
+file with Write. Measured for issue #69 with `claude -p` (Claude Code 2.1.281): creating
+`notes.py.bak`, `src/app.backup_before_x.js` and `src/clean_copy.js`, and editing an existing
+`old.bak`, were all refused; an ordinary `src/ok.js` was written; with no rules, all five went
+through. Adjust the patterns to the names your sessions actually produce.
+
+Two limits. A shell command that copies a file (`cp a.js a.js.bak`) is not caught, the same
+shell gap as above. And `deny` always beats `allow`, so a `scratch/**` exception inside the
+tree cannot be carved out: keep scratch files outside the repository.
+
 ### The commit-trailer hook, same opt-in shape
 
 `CHARTER.md §4` requires the trailer block to be the last paragraph with no blank line inside
