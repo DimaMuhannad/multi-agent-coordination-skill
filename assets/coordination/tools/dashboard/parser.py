@@ -19,7 +19,6 @@ from coordlib import diagnostics as diag  # noqa: E402
 from coordlib import md_table, schema  # noqa: E402
 from coordlib.md_table import split_table_row  # noqa: E402,F401
 
-STATUS_RE = re.compile(r"\*\*Status:?\*\*:?\s*`?([^`\n().]*)", re.IGNORECASE)
 HEADER_RE = re.compile(r"^##\s+\[([^\]]+)\]\s*(?:FROM\s+(\S+)\s+TO\s+(\S+)\s*[-—–]\s*)?(.*)$", re.IGNORECASE)
 
 
@@ -251,7 +250,15 @@ def parse_handoffs(path: Path, *, diagnostics=None) -> List[Dict[str, Any]]:
             continue
 
         if cur is not None:
-            sm = STATUS_RE.search(line)
+            sm = schema.STATUS_LINE_RE.match(line)
+            if sm is None and schema.STATUS_MENTION_RE.search(line) and not cur["is_template"]:
+                # Same rule and same report as build_index.py (issue #62).
+                diag.record(
+                    diagnostics, diag.MALFORMED_STATUS_LINE, path, idx,
+                    "`**Status:**` here is not at the start of a line, so it is not the "
+                    "entry's status line and was ignored",
+                    stripped,
+                )
             if sm:
                 # Last match wins, matching the entry shape HANDOFFS.md documents. This
                 # reader already behaved that way; build_index.py took the first, so the two

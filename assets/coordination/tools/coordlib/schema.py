@@ -73,6 +73,22 @@ _DECORATION = "`* \\"
 _PLACEHOLDER_RE = re.compile(r"^<[^>]*>$")
 
 
+# --------------------------------------------------------------------------------------
+# The HANDOFFS.md status line
+# --------------------------------------------------------------------------------------
+
+#: A handoff's status line: `- **Status:** open`, the list marker optional. Anchored to the
+#: start of the line on purpose (issue #62). Both readers used to `.search()` anywhere in a
+#: line, so a table cell or a sentence that merely quoted the marker -- documenting the
+#: convention itself, say -- became the entry's status, silently when it was the only match.
+#: One shared definition, because two private copies of it are how the readers drifted (#6).
+STATUS_LINE_RE = re.compile(r"^\s*(?:[-*+]\s+)?\*\*Status:?\*\*:?\s*`?([^`\n().]*)", re.IGNORECASE)
+
+#: The marker anywhere in a line. Only used to REPORT a mention that is not a status line, so
+#: ignoring it is visible rather than silent.
+STATUS_MENTION_RE = re.compile(r"\*\*Status:?\*\*", re.IGNORECASE)
+
+
 def strip_decoration(raw: Optional[str]) -> str:
     """Strip markdown decoration from a cell value, preserving case.
 
