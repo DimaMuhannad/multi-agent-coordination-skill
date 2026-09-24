@@ -18,7 +18,9 @@
 
 1. Name your session: `claude -n <role-session-name>` or `/rename`.
 2. Set the role so path-ownership enforcement knows who you are:
-   `COORDINATION_ROLE=<ID> claude`. Without it the ownership hook is inert — it never blocks
+   `COORDINATION_ROLE=<ID> claude`, or — for a session started from the app — the worktree's
+   `.claude/settings.local.json`: `{"env": {"COORDINATION_ROLE": "<ID>"}}`.
+   Without it the ownership hook is inert — it never blocks
    an unconfigured session, so a missing variable fails silently open, not loudly.
 3. Once, check `claude agents --json`: if a session with your name is already `busy` in this
    `cwd`, don't start — tell the owner.
