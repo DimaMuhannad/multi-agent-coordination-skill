@@ -48,7 +48,8 @@ PROMPT = (
 
 
 def run(cmd, cwd=None, check=True, **kw):
-    return subprocess.run(cmd, cwd=cwd, check=check, capture_output=True, text=True, **kw)
+    return subprocess.run(cmd, cwd=cwd, check=check, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", **kw)
 
 
 def latest_assets(skill_repo, workdir):
