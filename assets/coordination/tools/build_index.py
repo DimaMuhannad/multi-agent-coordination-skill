@@ -44,7 +44,6 @@ COORD = os.path.join(
     "coordination",
 )
 
-STATUS_RE = re.compile(r"\*\*Status:?\*\*:?\s*`?([^`\n().]*)", re.IGNORECASE)
 HEADER_RE = re.compile(r"^##\s+\[([^\]]+)\]\s*(.*)$")
 
 #: Hoisted out of the f-strings below: an f-string expression part may not contain a
@@ -186,7 +185,16 @@ def parse_handoffs(path, diagnostics=None):
             }
             continue
         if cur is not None:
-            sm = STATUS_RE.search(raw)
+            sm = schema.STATUS_LINE_RE.match(raw)
+            if sm is None and schema.STATUS_MENTION_RE.search(raw) and not cur["is_template"]:
+                # A mention of the marker in a table cell or in prose (issue #62). It does not
+                # set the status, and it is reported so that choice is never silent.
+                diag.record(
+                    diagnostics, diag.MALFORMED_STATUS_LINE, path, i,
+                    "`**Status:**` here is not at the start of a line, so it is not the "
+                    "entry's status line and was ignored",
+                    stripped,
+                )
             if sm:
                 # LAST match wins, matching the entry shape HANDOFFS.md documents, where the
                 # status line is the final line of the entry. This used to take the FIRST and

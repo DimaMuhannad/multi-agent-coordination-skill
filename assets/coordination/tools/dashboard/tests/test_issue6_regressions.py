@@ -311,3 +311,61 @@ def test_a_single_status_line_is_not_reported(tmp_path):
     sink = diag.DiagnosticList()
     build_index.parse_handoffs(str(handoffs), sink)
     assert diag.MALFORMED_STATUS_LINE not in sink.codes(), [str(d) for d in sink]
+
+
+_MENTION_TABLE = (
+    "| Column | Old behaviour |\n"
+    "|---|---|\n"
+    "| Status | old code only recognised `**Status:**` mid-sentence |\n"
+)
+
+
+def _both_readers(tmp_path, text):
+    handoffs = tmp_path / "HANDOFFS.md"
+    handoffs.write_text(text, encoding="utf-8")
+    core_diags = diag.DiagnosticList()
+    addon_diags = diag.DiagnosticList()
+    core = build_index.parse_handoffs(str(handoffs), core_diags)
+    addon = parse_handoffs(handoffs, diagnostics=addon_diags)
+    return core, addon, core_diags, addon_diags
+
+
+def test_a_status_mention_after_the_status_line_does_not_replace_it(tmp_path):
+    """Issue #62: a table cell quoting the marker, appended after the real status line, was
+    read as the entry's status -- and with a single match, with no diagnostic at all."""
+    core, addon, core_diags, addon_diags = _both_readers(
+        tmp_path,
+        "## [2026-09-09] FROM a TO b - thing\n"
+        "- What: do it\n"
+        "- **Status:** open\n"
+        "\n" + _MENTION_TABLE,
+    )
+    assert core[0]["status"] == addon[0]["status"] == "open"
+    for sink in (core_diags, addon_diags):
+        ignored = [d for d in sink if d.code == diag.MALFORMED_STATUS_LINE]
+        assert len(ignored) == 1 and "ignored" in str(ignored[0]), [str(d) for d in sink]
+
+
+def test_a_status_mention_before_the_status_line_is_not_a_second_status_line(tmp_path):
+    core, addon, core_diags, _ = _both_readers(
+        tmp_path,
+        "## [2026-09-09] FROM a TO b - thing\n"
+        "- What: do it\n"
+        + _MENTION_TABLE +
+        "- **Status:** done\n",
+    )
+    assert core[0]["status"] == addon[0]["status"] == "done"
+    assert core[0]["status_lines"] == [6]
+    assert not any("lines;" in str(d) for d in core_diags), [str(d) for d in core_diags]
+
+
+def test_a_status_line_without_a_list_marker_still_counts(tmp_path):
+    """Anchoring must not break entries written as `**Status:** done` on a line of its own."""
+    core, addon, core_diags, _ = _both_readers(
+        tmp_path,
+        "## [2026-09-09] FROM a TO b - thing\n"
+        "- What: do it\n"
+        "**Status:** done\n",
+    )
+    assert core[0]["status"] == addon[0]["status"] == "done"
+    assert diag.MALFORMED_STATUS_LINE not in core_diags.codes()
